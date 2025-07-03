@@ -1,3 +1,6 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
 '''
 Standard FitzHugh-Nagumo equations for comparison w/ the above method.
 Returns:
@@ -57,3 +60,25 @@ def fhn_vf_b(state, t, non_aut_term, alpha = 0.2, beta = 1.1, gamma = 0.31, delt
     # Add time-dependent voltage perturbation
     u_dot +=  non_aut_term(t)
     return u_dot, v_dot
+
+def compare_exact_and_sindy_coefs(variables: list, coef_sindy: np.ndarray, coef_exact: np.ndarray):
+    # Order of coefficients: 1, u, v, u^2, uv, v^2, u^3, u^2v, uv^2, v^3
+    variables = ["1", "u", "v", "u^2", "uv", "v^2", "u^3", "u^2v", "uv^2", "v^3"]
+    coef_sindy = model_vf_b.coefficients()
+    coef_exact = np.array([[0, -0.22, 0, 0.42, -1.0, 0, -0.2, 0, 0, 0],
+                        [0.0515, 0.3193, -0.00309, -1.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    x = np.arange(len(coef_sindy[0]))
+
+    # Use bar chart to compare the SINDy and exact coefficient values.
+    width = 0.4
+    plt.figure(figsize=(8, 4))
+    plt.bar(x - width/2, coef_sindy[0], width=width, alpha=0.9, label='SINDy')
+    plt.bar(x + width/2, coef_exact[0], width=width, alpha=0.9, label='Exact')
+
+    plt.title('Exact vs. SINDy Coefficients for FHN VF-b')
+    plt.ylabel('Coefficient Values')
+    plt.xlabel('Variables')
+    plt.xticks(x, variables)
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(axis='y', alpha=0.3)

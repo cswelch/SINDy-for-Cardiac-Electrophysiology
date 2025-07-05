@@ -49,16 +49,16 @@ class GenLibraryFit():
         alpha, beta, gamma, delta, eps, [theta, mu] (float): Parameters for the FHN equations.
     '''
     # Define standard FHN w/ non_aut_term_data term
-    def fhn_td(self, state, t, alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01):
-        return fhn(state, t, self.non_aut_term_data, alpha, beta, gamma, delta, eps)
+    def fhn_td(self, state, t):
+        return fhn(state, t, self.non_aut_term_data)
     
     # Define cardiac FHN w/ non_aut_term_data term
-    def fhn_c_td(self, state, t, alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01):
-        return fhn_c(state, t, self.non_aut_term_data, alpha, beta, gamma, delta, eps)
+    def fhn_c_td(self, state, t):
+        return fhn_c(state, t, self.non_aut_term_data)
     
     # Define VF-b variant of FHN w/ non_aut_term_data term
-    def fhn_vf_b_td(self, state, t, alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0):
-        return fhn_vf_b(state, t, self.non_aut_term_data, alpha, beta, gamma, delta, eps, theta, mu)
+    def fhn_vf_b_td(self, state, t):
+        return fhn_vf_b(state, t, self.non_aut_term_data)
 
     '''
     Fit the model using a GeneralizedLibrary with variable-specific libraries for u, v, and t.

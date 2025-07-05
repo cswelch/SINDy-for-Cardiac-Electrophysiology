@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pysindy as ps
+from typing import Callable
 
 '''
 Standard FitzHugh-Nagumo equations for comparison w/ the above method.
@@ -33,7 +34,7 @@ Params:
     non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
     alpha = 0.1, beta = 1, gamma = 1.6, delta = 0.0, eps = 0.01 (use delta = 1.0 for auto-oscillatory state)
 '''
-def fhn_c(state, t, non_aut_term, alpha = 0.1, beta = 1, gamma = 1.6, delta = 0.0, eps = 0.01):
+def fhn_c(state, t, non_aut_term, alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01):
     u, v = state
     u_dot = u*(1-u)*(u-alpha) - u*v   # Note - The cardiac version without hyperpolarization (FHN-c) has -u*v instead of -v. ID success can change depending on which variant we use.
     v_dot = eps*(beta*u - gamma*v - delta)
@@ -67,13 +68,13 @@ Generate bar chart to compare the exact and fit SINDy coefficients for the given
 Returns:
     None
 Params:
-    model (ps.SINDy):           The SINDy model to compare coefficients with.
+    model (ps.SINDy):           The SINDy model from which to extract the fit coefficients.
+    eqns (method):              The equations used to evaluate the exact coefficients.
     variables (list):           List of variable names, as strings, corresponding to the coefficients.
-    coef_sindy (np.ndarray):    Array of float coefficients from the SINDy model.
     coef_exact (np.ndarray):    Array of exact coefficients to compare against.
     precision (int):            Exponent with base 10 of tolerance below which terms are considered zero. (E.g., 5 for 1e-5.)
 '''
-def compare_exact_and_sindy_coefs(model: ps.SINDy, variables: list, coef_sindy: np.ndarray, coef_exact: np.ndarray, precision: int = 5):
+def compare_exact_and_sindy_coefs(model: ps.SINDy, eqns: Callable, variables: list, coef_exact: np.ndarray, precision: int = 5):
     # Order of coefficients: 1, u, v, u^2, uv, v^2, u^3, u^2v, uv^2, v^3
     variables = ["1", "u", "v", "u^2", "uv", "v^2", "u^3", "u^2v", "uv^2", "v^3"]
     coef_sindy = model.coefficients()
@@ -82,7 +83,6 @@ def compare_exact_and_sindy_coefs(model: ps.SINDy, variables: list, coef_sindy: 
     x = np.arange(len(coef_sindy[0]))
 
     # Compare number of terms in the SINDy model to the exact coefficients.
-    precision = 5
     tol = 10**(-precision)
     print(f"Number of SINDy terms for u\', v\': ({np.sum(np.abs(coef_sindy[0]) > tol)}, {np.sum(np.abs(coef_sindy[1]) > tol)})")
     print(f"Number of exact terms for u\', v\': ({np.sum(np.abs(coef_exact[0]) > tol)}, {np.sum(np.abs(coef_exact[1]) > tol)})")

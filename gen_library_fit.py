@@ -1,7 +1,7 @@
 import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
-from fhn_models import fhn, fhn_c, fhn_vf_b
+from fhn_models import fhn, fhn_c, fhn_vf_b, compare_exact_and_sindy_coefs
 import matplotlib.pyplot as plt
 
 class GenLibraryFit():
@@ -117,3 +117,6 @@ class GenLibraryFit():
         model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=0.00001, normalize_columns=True))
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td)
         model_fhn_td.print(precision=5)
+
+        # Create bar chart comparison between SINDy and exact coefficients.
+        compare_exact_and_sindy_coefs(model_fhn_td, self.fhn_variant)

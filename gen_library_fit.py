@@ -25,10 +25,13 @@ class GenLibraryFit():
         self.non_aut_term_fit = non_aut_term_fit
         
         if fhn_variant == "standard":
+            self.fhn_name = "standard"
             self.fhn_variant = self.fhn_td
         elif fhn_variant == "cardiac":
+            self.fhn_name = "cardiac"
             self.fhn_variant = self.fhn_c_td
         elif fhn_variant == "vf":
+            self.fhn_name = "vf"
             self.fhn_variant = self.fhn_vf_b_td
 
         # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
@@ -119,4 +122,4 @@ class GenLibraryFit():
         model_fhn_td.print(precision=5)
 
         # Create bar chart comparison between SINDy and exact coefficients.
-        compare_exact_and_sindy_coefs(model_fhn_td, self.fhn_variant)
+        compare_exact_and_sindy_coefs(model_fhn_td, self.fhn_name)

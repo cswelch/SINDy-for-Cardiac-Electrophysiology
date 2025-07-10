@@ -72,22 +72,19 @@ Generate bar chart to compare the exact and fit SINDy coefficients for the given
 Returns:
     None
 Params:
-    model (ps.SINDy):       The SINDy model from which to extract the fit coefficients.
-    fhn_name (str):      The fhn method (chosen from 1. "standard" 2. "cardiac" 3. "vf") used to evaluate the exact coefficients.
-    precision (int):        Exponent with base 10 of tolerance below which terms are considered zero. (E.g., 5 for 1e-5.)
+    model (ps.SINDy):   The SINDy model from which to extract the fit coefficients.
+    fhn_name (str):     The fhn method (chosen from 1. "standard" 2. "cardiac" 3. "vf") used to evaluate the exact coefficients.
+    precision (int):    Exponent with base 10 of tolerance below which terms are considered zero. (E.g., 5 for 1e-5.)
 '''
-def compare_exact_and_sindy_coefs(model: ps.SINDy, fhn_name: str, precision: int = 5):
+def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_data: Callable, non_aut_term_fit: Callable, precision: int = 5):
     # Order of coefficients: 1, u, v, u^2, uv, v^2, u^3, u^2v, uv^2, v^3
     # Use SymPy to symbolically evaluate the FHN variant, summing like terms and extracting the coefficients.
-    monomials = ['1', 'u', 'v', 'u^2', 'uv', 'v^2', 'u^3', 'u^2v', 'uv^2', 'v^3']
+    monomial_names = model.get_feature_names()
+    print(f"Monomials: {monomial_names}")
     coef_sindy = model.coefficients()
-    coef_exact = get_fhn_exact_coeffs(fhn_name=fhn_name)
+    coef_exact = get_fhn_exact_coeffs(fhn_name=fhn_name, monomial_names=monomial_names)
     # coef_exact = np.array([[0, -0.22, 0, 0.42, -1.0, 0, -0.2, 0, 0, 0],
     #                     [0.0515, 0.3193, -0.00309, -1.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-    print("------")
-    print(coef_sindy)
-    print(coef_exact)
-    print("------")
     x = np.arange(len(coef_sindy[0]))
 
     # Compare number of terms in the SINDy model to the exact coefficients.
@@ -99,15 +96,18 @@ def compare_exact_and_sindy_coefs(model: ps.SINDy, fhn_name: str, precision: int
     print("\nSINDy coefficients:")
     model.print(precision=precision)
     print("\nExact coefficients:")
-    # for i in range(len(coef_exact)):
-    #     eqn = ""
-    #     eqn += ("u\' = " if i == 0 else "v\' = ")
-    #     for j in range(len(coef_exact[0])):
-    #         if (np.abs(coef_exact[i][j]) > tol) and (j < len(coef_exact[0]) - 1):  # Print only nonzero coefficients.
-    #             eqn += f"{coef_exact[i][j]} {monomials[j]} + "
-    #         elif (j == len(coef_exact[0]) - 1):  # Handle the last term separately.
-    #             eqn += f"{coef_exact[i][j]} {monomials[j]}"
-    #     print(eqn)
+    for i in range(len(coef_exact)):
+        eqn = ""
+        eqn += ("u\' = " if i == 0 else "v\' = ")
+        # Return the index of the final nonzero coefficient in the current equation (or -1 if all coefficients are zero).
+        final_nonzero_index = np.nonzero(np.abs(coef_exact[i]) > tol)[0][-1] if np.any(np.abs(coef_exact[i]) > tol) else -1
+        
+        for j in range(len(coef_exact[0])):
+            if (np.abs(coef_exact[i][j]) > tol) and (j < final_nonzero_index):  # Print only nonzero coefficients.
+                eqn += f"{coef_exact[i][j]:.{precision}f} {monomial_names[j]} + "
+            elif (j == final_nonzero_index):  # Handle the last term separately.
+                eqn += f"{coef_exact[i][j]:.{precision}f} {monomial_names[j]}"
+        print(eqn)
 
 
     # Use bar chart to compare the SINDy and exact coefficient values (for u').
@@ -116,10 +116,11 @@ def compare_exact_and_sindy_coefs(model: ps.SINDy, fhn_name: str, precision: int
     plt.bar(x - width/2, coef_sindy[0], width=width, alpha=0.9, label='SINDy')
     plt.bar(x + width/2, coef_exact[0], width=width, alpha=0.9, label='Exact')
 
-    plt.title('SINDy vs. Exact Coefficients (u\')')
+    # Print the titles. Include the fhn_name and string form of the non-autonomous data method.
+    plt.title(f'SINDy vs. Exact Coefficients for {fhn_name} with {non_aut_term_data.__name__} Data and {non_aut_term_fit.__name__} Fit (u\')')
     plt.ylabel('Coefficient Values')
     plt.xlabel('Monomials')
-    plt.xticks(x, monomials)
+    plt.xticks(x, monomial_names)
     plt.legend()
     plt.tight_layout()
     plt.grid(axis='y', alpha=0.3)
@@ -131,10 +132,10 @@ def compare_exact_and_sindy_coefs(model: ps.SINDy, fhn_name: str, precision: int
     plt.bar(x - width/2, coef_sindy[1], width=width, alpha=0.9, label='SINDy')
     plt.bar(x + width/2, coef_exact[1], width=width, alpha=0.9, label='Exact')
 
-    plt.title('SINDy vs. Exact Coefficients (v\')')
+    plt.title(f'SINDy vs. Exact Coefficients for {fhn_name} with {non_aut_term_data.__name__} Data and {non_aut_term_fit.__name__} Fit (v\')')
     plt.ylabel('Coefficient Values')
     plt.xlabel('Monomials')
-    plt.xticks(x, monomials)
+    plt.xticks(x, monomial_names)
     plt.legend()
     plt.tight_layout()
     plt.grid(axis='y', alpha=0.3)
@@ -145,12 +146,20 @@ Get the exact coefficients for the FHN equations using SymPy.
 Returns:
     (np.array): 2D array containing u' and v' coefficients, respectively.
 Params:
-    fhn_variant (str): The variant of the FHN equations to use. Options are "standard", "cardiac", or "vf".
-    params (dict): Optional dictionary of parameters to use for the FHN equations. If None, default parameters are used.
+    fhn_variant (str):              The variant of the FHN equations to use. Options are "standard", "cardiac", or "vf".
+    monomial_names (list of str):   List of monomial names to use in the equations.
+    params (dict):                  Optional dictionary of parameters to use for the FHN equations. If None, default parameters are used.
 '''
-def get_fhn_exact_coeffs(fhn_name="standard", params=None):
+def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u**3', 'v', '1', 'f_td'], params=None):
     # Define symbols
-    u, v, t = sym.symbols('u v t')
+    u, v, f_td = sym.symbols('u v f_td')
+
+    # Ensure monomial term names match those used in the equations.
+    if 'f_td(t)' in monomial_names:
+        monomial_names[monomial_names.index('f_td(t)')] = 'f_td'
+
+    print(f"Edited monomial names: {monomial_names}")
+
     # Default parameters
     if params is None:
         if fhn_name == "standard":
@@ -164,21 +173,28 @@ def get_fhn_exact_coeffs(fhn_name="standard", params=None):
 
     # Build symbolic equations
     if fhn_name == "standard":
-        u_rhs = u*(1-u)*(u-params['alpha']) - v
+        u_rhs = u*(1-u)*(u-params['alpha']) - v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
     elif fhn_name == "cardiac":
-        u_rhs = u*(1-u)*(u-params['alpha']) - u*v
+        u_rhs = u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
     elif fhn_name == "vf":
-        u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v
+        u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*((params['beta']-u)*(u-params['gamma']) - params['delta']*v - params['theta'])
     else:
         raise ValueError("Unknown FHN variant")
 
     # Expand and collect coefficients
-    monomials = [1, u, v, u**2, u*v, v**2, u**3, u**2*v, u*v**2, v**3]
-    u_rhs_exp = sym.expand(u_rhs)
-    v_rhs_exp = sym.expand(v_rhs)
-    u_coefs = [float(u_rhs_exp.coeff(m)) for m in monomials]
-    v_coefs = [float(v_rhs_exp.coeff(m)) for m in monomials]
-    return np.array([u_coefs, v_coefs])
+    u_rhs_exp = sym.expand(u_rhs).as_poly(u, v, f_td)
+    v_rhs_exp = sym.expand(v_rhs).as_poly(u, v, f_td)
+
+    m_sym = [sym.sympify(m) for m in monomial_names]
+
+    u_coeffs = [float(u_rhs_exp.coeff_monomial(m)) for m in m_sym]
+    v_coeffs = [float(v_rhs_exp.coeff_monomial(m)) for m in m_sym]
+    print("u_rhs_exp:", u_rhs_exp)
+    print("v_rhs_exp:", v_rhs_exp)
+    print("u_coeffs:", u_coeffs)
+    print("v_coeffs:", v_coeffs)
+
+    return np.array([u_coeffs, v_coeffs])

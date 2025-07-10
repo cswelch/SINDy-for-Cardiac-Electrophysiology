@@ -1,7 +1,7 @@
 import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
-from fhn_models import fhn, fhn_c, fhn_vf_b, compare_exact_and_sindy_coefs
+from fhn_models import fhn, fhn_c, fhn_vf_b, compare_exact_and_sindy_coeffs
 import matplotlib.pyplot as plt
 
 class GenLibraryFit():
@@ -100,11 +100,13 @@ class GenLibraryFit():
         t_library = ps.CustomLibrary(library_functions=t_functions,
                                             function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')'])
 
+        # TODO Specify that t terms can only be in the u_dot and t_dot equations.
         '''
-        Specify which inputs to use for each of the u', v', and t' equations.  I.e.:
+        Specify which functions apply to which variables. I.e.:
             u_library: Contains only functions of u (index 0)
             v_library: Contains only functions of v (index 1)
             t_library: Contains only functions of t (index 2)
+        At the moment, we don't specify in which equations (e.g., u_dot, v_dot) each variable can be used.
         '''
         inputs_per_library = np.array([[0], 
                                         [1], 
@@ -119,7 +121,6 @@ class GenLibraryFit():
         # Do the SINDy fit
         model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=0.00001, normalize_columns=True))
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td)
-        model_fhn_td.print(precision=5)
 
         # Create bar chart comparison between SINDy and exact coefficients.
-        compare_exact_and_sindy_coefs(model_fhn_td, self.fhn_name)
+        compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)

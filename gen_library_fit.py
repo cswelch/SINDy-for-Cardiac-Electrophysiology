@@ -69,15 +69,13 @@ class GenLibraryFit():
         non_aut_func (function): A function that takes time as input and returns a non-autonomous term.
     '''
     def fit(self):
-        # Define variable-specific functions
-        u_functions = [
+        # Define variable-specific functions; functions of u and v are included in the first library, while the non-autonomous term is included in the second library. 
+        # Note that the non-autonomous term is only applied to the u_dot equation.
+        u_v_functions = [
             lambda u: u, 
             lambda u: u**2, 
-            lambda u: u**3
-        ]
-
-        v_functions = [
-            lambda v: v
+            lambda u: u**3,
+            lambda u, v: u*v
         ]
 
         t_functions = [
@@ -85,33 +83,30 @@ class GenLibraryFit():
             self.non_aut_term_fit
         ]
 
-        # TODO Change the above to use PolynomialLibrary
-        # ps.PolynomialLibrary(degree=3)
-        # concat_library = ps.ConcatLibrary([ps.PolynomialLibrary(degree=3), custom_library])
-
-
         '''
         Create variable-specific libraries
         '''
-        u_library = ps.CustomLibrary(library_functions=u_functions,
-                                            function_names=[lambda u: u, lambda u: u + '^2', lambda u: u + '^3'])
-        v_library = ps.CustomLibrary(library_functions=v_functions,
-                                            function_names=[lambda v: v])
+        u_v_library = ps.CustomLibrary(library_functions=u_v_functions,
+                                            function_names=[lambda u: u, lambda u: u + '^2', lambda u: u + '^3', lambda u, v: u + '*' + v])
         t_library = ps.CustomLibrary(library_functions=t_functions,
                                             function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')'])
+        
+        print("WE\'VE MADE CHANGES (FINALLY)!!!")
 
         # TODO Specify that t terms can only be in the u_dot and t_dot equations.
         '''
-        Specify which functions apply to which variables. I.e.:
-            u_library: Contains only functions of u (index 0)
-            v_library: Contains only functions of v (index 1)
-            t_library: Contains only functions of t (index 2)
+        Specify which functions apply to which variables. The ith row of inputs_per_library corresponds to the ith library, 
+        and the jth column corresponds to the jth feature. Duplicate values are needed to ensure we don't have a ragged
+        array with differing numbers of entries in each row. E.g., [[0,0,0], [1,1,2], [0,1,2]] would mean that the first
+        library is applied to the first feature (u), the second library is applied to the second and third features (v,t),
+        and the third library is applied to all three features (u,v,t). In our case, we have the following correspondence:
+            u_v_library: Contains only functions of features 0 and 1 (u,v)
+            t_library: Contains only functions of feature 2 (t)
         At the moment, we don't specify in which equations (e.g., u_dot, v_dot) each variable can be used.
         '''
-        inputs_per_library = np.array([[0], 
-                                        [1], 
-                                        [2]])
-        gen_library = ps.GeneralizedLibrary([u_library, v_library, t_library], inputs_per_library=inputs_per_library)
+        inputs_per_library = np.array([[0,1,1], 
+                                       [2,2,2]])
+        gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
 
         # Fit SINDy model

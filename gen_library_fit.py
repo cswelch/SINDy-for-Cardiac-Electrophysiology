@@ -91,8 +91,6 @@ class GenLibraryFit():
         t_library = ps.CustomLibrary(library_functions=t_functions,
                                             function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')'])
         
-        print("WE\'VE MADE CHANGES (FINALLY)!!!")
-
         # TODO Specify that t terms can only be in the u_dot and t_dot equations.
         '''
         Specify which functions apply to which variables. The ith row of inputs_per_library corresponds to the ith library, 
@@ -114,7 +112,7 @@ class GenLibraryFit():
         out = gen_library.transform(self.states_fhn_td)
 
         # Do the SINDy fit
-        model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=0.00001, normalize_columns=True))
+        model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td)
 
         # Create bar chart comparison between SINDy and exact coefficients.

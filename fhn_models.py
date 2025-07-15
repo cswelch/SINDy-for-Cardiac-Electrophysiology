@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pysindy as ps
 from typing import Callable
 import sympy as sym
+from sklearn import metrics
 
 '''
 Standard FitzHugh-Nagumo equations for comparison w/ the above method.
@@ -83,14 +84,13 @@ def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_
     print(f"Monomials: {monomial_names}")
     coef_sindy = model.coefficients()
     coef_exact = get_fhn_exact_coeffs(fhn_name=fhn_name, monomial_names=monomial_names)
-    # coef_exact = np.array([[0, -0.22, 0, 0.42, -1.0, 0, -0.2, 0, 0, 0],
-    #                     [0.0515, 0.3193, -0.00309, -1.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-    x = np.arange(len(coef_sindy[0]))
 
     # Compare number of terms in the SINDy model to the exact coefficients.
     tol = 10**(-precision)
     print(f"Number of SINDy terms for u\', v\': ({np.sum(np.abs(coef_sindy[0]) > tol)}, {np.sum(np.abs(coef_sindy[1]) > tol)})")
     print(f"Number of exact terms for u\', v\': ({np.sum(np.abs(coef_exact[0]) > tol)}, {np.sum(np.abs(coef_exact[1]) > tol)})")
+    mse_coef = metrics.mean_squared_error(coef_exact, coef_sindy[0:2])
+    print(f"Mean Squared Error of coefficients: {mse_coef:.{precision}e}")
 
     # Compare the SINDy and exact coefficients.
     print("\nSINDy coefficients:")
@@ -112,6 +112,7 @@ def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_
 
     # Use bar chart to compare the SINDy and exact coefficient values (for u').
     width = 0.4
+    x = np.arange(len(coef_sindy[0]))
     plt.figure(figsize=(8, 4))
     plt.bar(x - width/2, coef_sindy[0], width=width, alpha=0.9, label='SINDy')
     plt.bar(x + width/2, coef_exact[0], width=width, alpha=0.9, label='Exact')

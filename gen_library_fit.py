@@ -1,7 +1,7 @@
 import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
-from fhn_models import fhn, fhn_c, fhn_vf_b, compare_exact_and_sindy_coeffs
+from fhn_models import fhn, fhn_c, fhn_vf_a, fhn_vf_b, compare_exact_and_sindy_coeffs
 import matplotlib.pyplot as plt
 
 class GenLibraryFit():
@@ -15,11 +15,11 @@ class GenLibraryFit():
         non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
         fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use - "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
     '''
-    def __init__(self, dt, non_aut_term_data, non_aut_term_fit, fhn_variant="standard"):
+    def __init__(self, dt, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0])):
         # Generate data w/ standard FHN parameters
         self.dt = dt
-        self.t_fhn_td = np.arange(0,2000,dt)
-        self.x_0_fhn_td = np.array([-0.1,0])    # TODO adjust v_0; may want a bit lower
+        self.t_fhn_td = t_range
+        self.x_0_fhn_td = ics
 
         self.non_aut_term_data = non_aut_term_data
         self.non_aut_term_fit = non_aut_term_fit
@@ -30,8 +30,11 @@ class GenLibraryFit():
         elif fhn_variant == "cardiac":
             self.fhn_name = "cardiac"
             self.fhn_variant = self.fhn_c_td
-        elif fhn_variant == "vf":
-            self.fhn_name = "vf"
+        elif fhn_variant == "vfa":
+            self.fhn_name = "vfa"
+            self.fhn_variant = self.fhn_vf_a_td
+        elif fhn_variant == "vfb":
+            self.fhn_name = "vfb"
             self.fhn_variant = self.fhn_vf_b_td
 
         # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
@@ -60,6 +63,10 @@ class GenLibraryFit():
         return fhn_c(state, t, self.non_aut_term_data)
     
     # Define VF-b variant of FHN w/ non_aut_term_data term
+    def fhn_vf_a_td(self, state, t):
+        return fhn_vf_a(state, t, self.non_aut_term_data)
+    
+    # Define VF-a variant of FHN w/ non_aut_term_data term
     def fhn_vf_b_td(self, state, t):
         return fhn_vf_b(state, t, self.non_aut_term_data)
 
@@ -67,6 +74,8 @@ class GenLibraryFit():
     Fit the model using a GeneralizedLibrary with variable-specific libraries for u, v, and t.
     Params:
         non_aut_func (function): A function that takes time as input and returns a non-autonomous term.
+    Returns:
+        model_fhn_td (pysindy.SINDy): A fitted SINDy model with the specified non-autonomous term.
     '''
     def fit(self):
         # Define variable-specific functions; functions of u and v are included in the first library, while the non-autonomous term is included in the second library. 
@@ -117,3 +126,5 @@ class GenLibraryFit():
 
         # Create bar chart comparison between SINDy and exact coefficients.
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
+
+        return model_fhn_td

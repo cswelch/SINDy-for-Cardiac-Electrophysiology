@@ -48,7 +48,28 @@ def fhn_c(state, t, non_aut_term, alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.
 
 
 '''
-Generate the data using the VF-b modified FHN equations:
+Generate the data using the 4-parameter VF-a modified FHN equations from Velasco et al.
+Returns:
+    u_dot (float): The time derivative of the state variable u.
+    v_dot (float): The time derivative of the state variable v.
+Params:
+    state (2d array):        Contains the state variables u and v
+    t (1d array):            Time input
+    non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
+    alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0: Default parameters for the VF-a equations.
+'''
+def fhn_vf_a(state, t, non_aut_term, alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0):
+    u, v = state
+    u_dot = mu * u * (1-u) * (u-alpha) - u*v  # Note - The cardiac version without hyperpolarization (FHN-c) has -u*v instead of -v. ID success can change depending on which variant we use.
+    v_dot = eps * (u * (beta-u) - v)
+
+    # Add time-dependent voltage perturbation
+    u_dot +=  non_aut_term(t)
+    return u_dot, v_dot
+
+
+'''
+Generate the data using the 7-parameter VF-b modified FHN equations from Velasco et al.
 Returns:
     u_dot (float): The time derivative of the state variable u.
     v_dot (float): The time derivative of the state variable v.
@@ -81,7 +102,7 @@ def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_
     # Order of coefficients: 1, u, v, u^2, uv, v^2, u^3, u^2v, uv^2, v^3
     # Use SymPy to symbolically evaluate the FHN variant, summing like terms and extracting the coefficients.
     monomial_names = model.get_feature_names()
-    print(f"Monomials: {monomial_names}")
+    # print(f"Monomials: {monomial_names}")
     coef_sindy = model.coefficients()
     coef_exact = get_fhn_exact_coeffs(fhn_name=fhn_name, monomial_names=monomial_names)
 
@@ -159,19 +180,22 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
     if 'f_td(t)' in monomial_names:
         monomial_names[monomial_names.index('f_td(t)')] = 'f_td'
 
-    print(f"Edited monomial names: {monomial_names}")
+    # print(f"Edited monomial names: {monomial_names}")
 
     # Default parameters
     if params is None:
         if fhn_name == "standard":
-            params = dict(alpha=0.1, beta=0.5, gamma=1, delta=0.0, eps=0.01)
+            params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         elif fhn_name == "cardiac":
-            params = dict(alpha=0.1, beta=0.5, gamma=1, delta=0.0, eps=0.01)
-        elif fhn_name == "vf":
-            params = dict(alpha=0.2, beta=1.1, gamma=0.31, delta=0.0, eps=0.005, theta=-0.05, mu=1.0)
+            params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
+        elif fhn_name == "vfa":
+            params = dict(alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0)
+        elif fhn_name == "vfb":
+            params = dict(alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0)
         else:
             raise ValueError("Unknown FHN variant")
 
+    # TODO Would like to use preexisting functions from this module to avoid code duplication, but they aren't currently working with SymPy.
     # Build symbolic equations
     if fhn_name == "standard":
         u_rhs = u*(1-u)*(u-params['alpha']) - v + f_td
@@ -179,7 +203,10 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
     elif fhn_name == "cardiac":
         u_rhs = u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
-    elif fhn_name == "vf":
+    elif fhn_name == "vfa":
+        u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
+        v_rhs = params['eps']*(u*(params['beta']-u) - v)
+    elif fhn_name == "vfb":
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*((params['beta']-u)*(u-params['gamma']) - params['delta']*v - params['theta'])
     else:
@@ -193,9 +220,9 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
 
     u_coeffs = [float(u_rhs_exp.coeff_monomial(m)) for m in m_sym]
     v_coeffs = [float(v_rhs_exp.coeff_monomial(m)) for m in m_sym]
-    print("u_rhs_exp:", u_rhs_exp)
-    print("v_rhs_exp:", v_rhs_exp)
-    print("u_coeffs:", u_coeffs)
-    print("v_coeffs:", v_coeffs)
+    # print("u_rhs_exp:", u_rhs_exp)
+    # print("v_rhs_exp:", v_rhs_exp)
+    # print("u_coeffs:", u_coeffs)
+    # print("v_coeffs:", v_coeffs)
 
     return np.array([u_coeffs, v_coeffs])

@@ -9,15 +9,14 @@ class GenLibraryFit():
     Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
     non-autonomous term function.
     Params:
-        func (function): A function that takes time as input and returns a non-autonomous term.
-        dt (float): The time step for generating data.
         non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
         non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-        fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use - "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
+        fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
+        t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
+        ics (1d array): Initial conditions for the FHN equations.
     '''
-    def __init__(self, dt, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0])):
+    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0])):
         # Generate data w/ standard FHN parameters
-        self.dt = dt
         self.t_fhn_td = t_range
         self.x_0_fhn_td = ics
 

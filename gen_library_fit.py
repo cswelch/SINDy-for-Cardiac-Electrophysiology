@@ -1,7 +1,7 @@
 import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
-from fhn_models import fhn, fhn_c, fhn_vf_a, fhn_vf_b, compare_exact_and_sindy_coeffs
+from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs
 import matplotlib.pyplot as plt
 
 class GenLibraryFit():
@@ -14,11 +14,13 @@ class GenLibraryFit():
         fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
         t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
         ics (1d array): Initial conditions for the FHN equations.
+        color (string): Color to use for the original data in the reconstruction plots.
     '''
-    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0])):
+    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue"):
         # Generate data w/ standard FHN parameters
         self.t_fhn_td = t_range
         self.x_0_fhn_td = ics
+        self.color = color
 
         self.non_aut_term_data = non_aut_term_data
         self.non_aut_term_fit = non_aut_term_fit
@@ -29,12 +31,12 @@ class GenLibraryFit():
         elif fhn_variant == "cardiac":
             self.fhn_name = "cardiac"
             self.fhn_variant = self.fhn_c_td
-        elif fhn_variant == "vfa":
-            self.fhn_name = "vfa"
-            self.fhn_variant = self.fhn_vf_a_td
-        elif fhn_variant == "vfb":
-            self.fhn_name = "vfb"
-            self.fhn_variant = self.fhn_vf_b_td
+        elif fhn_variant == "VF4":
+            self.fhn_name = "VF4"
+            self.fhn_variant = self.fhn_vf_4_td
+        elif fhn_variant == "VF7":
+            self.fhn_name = "VF7"
+            self.fhn_variant = self.fhn_vf_7_td
 
         # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
         self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
@@ -44,6 +46,7 @@ class GenLibraryFit():
         # print(t_fhn_td.shape)
         # print(states_fhn_td.shape)
         # print(states_fhn_td[0:10,:])
+
 
     '''
     FitzHugh-Nagumo equations modified with an additional equation for time.
@@ -57,17 +60,54 @@ class GenLibraryFit():
     def fhn_td(self, state, t):
         return fhn(state, t, self.non_aut_term_data)
     
+
     # Define cardiac FHN w/ non_aut_term_data term
     def fhn_c_td(self, state, t):
         return fhn_c(state, t, self.non_aut_term_data)
     
-    # Define VF-b variant of FHN w/ non_aut_term_data term
-    def fhn_vf_a_td(self, state, t):
-        return fhn_vf_a(state, t, self.non_aut_term_data)
+
+    # Define VF-a (VF-4) variant of FHN w/ non_aut_term_data term
+    def fhn_vf_4_td(self, state, t):
+        return fhn_vf_4(state, t, self.non_aut_term_data)
     
-    # Define VF-a variant of FHN w/ non_aut_term_data term
-    def fhn_vf_b_td(self, state, t):
-        return fhn_vf_b(state, t, self.non_aut_term_data)
+
+    # Define VF-b (VF-7) variant of FHN w/ non_aut_term_data term
+    def fhn_vf_7_td(self, state, t):
+        return fhn_vf_7(state, t, self.non_aut_term_data)
+
+
+    '''
+        Reconstruct the system using the fitted SINDy model and plot the results.
+        Params:
+            model (pysindy.SINDy): A fitted SINDy model.
+            t (1d array): Time range for simulation.
+            x_0 (1d array): Initial conditions for simulation.
+    '''
+    def reconstruct_and_plot(self, model, t, x_0):
+        # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
+        x_0 = np.concatenate((x_0, np.array([t[0]])))
+        model_reconstruction = model.simulate(x_0, t, integrator='odeint')
+
+        fig, ax = plt.subplots(2, 1, figsize=(8, 8), dpi=200)
+        plt.tight_layout()
+        plt.subplots_adjust(hspace=0.3) # Add space between the two plots
+
+        # Plot for u and v variables
+        for i in range(model_reconstruction.shape[1] - 1):
+            ax[i].plot(self.states_fhn_td[:, 2], self.states_fhn_td[:, i], label='Exact Solution', color=self.color)
+            ax[i].plot(t, model_reconstruction[:,i], label='SINDy Reconstruction', color='black', linestyle='--')
+            ax[i].set_xlim(0, t[-1])
+            ax[i].set_xlabel('t')
+            ax[i].set_ylabel(['u', 'v'][i])
+            ax[i].set_title([f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})', f'Recovery Variable vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})'][i])
+            # ax[i].grid()
+            # if (i == 0):
+            #     ax[i].set_ylim(-0.05, 0.9) # Set constanty limits for u plot to maintain comparability
+            if (i == 1):
+                # ax[i].set_ylim(0.08, 0.185) # Set constant limits for v plot to maintain comparability
+                ax[i].legend() # Only add legend to the 2nd plot to save space
+            
+
 
     '''
     Fit the model using a GeneralizedLibrary with variable-specific libraries for u, v, and t.
@@ -115,9 +155,9 @@ class GenLibraryFit():
         gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
 
-        # Fit SINDy model
-        out = gen_library.fit(self.states_fhn_td)
-        out = gen_library.transform(self.states_fhn_td)
+        # TODO Is there any use for fit / transform here?
+        # out = gen_library.fit(self.states_fhn_td)
+        # out = gen_library.transform(self.states_fhn_td)
 
         # Do the SINDy fit
         model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
@@ -125,5 +165,8 @@ class GenLibraryFit():
 
         # Create bar chart comparison between SINDy and exact coefficients.
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
+
+        # Reconstruct the solution from the SINDy fit and plot it against the data.        
+        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td)
 
         return model_fhn_td

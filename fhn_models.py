@@ -58,7 +58,7 @@ Params:
     non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
     alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0: Default parameters for the VF-a equations.
 '''
-def fhn_vf_a(state, t, non_aut_term, alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0):
+def fhn_vf_4(state, t, non_aut_term, alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0):
     u, v = state
     u_dot = mu * u * (1-u) * (u-alpha) - u*v  # Note - The cardiac version without hyperpolarization (FHN-c) has -u*v instead of -v. ID success can change depending on which variant we use.
     v_dot = eps * (u * (beta-u) - v)
@@ -79,7 +79,7 @@ Params:
     non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
     alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 1.0, eps = 0.005, theta = -0.05, mu = 1.0 (Old auto-oscillatory parameters used to get these equations)
 '''
-def fhn_vf_b(state, t, non_aut_term, alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0):
+def fhn_vf_7(state, t, non_aut_term, alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0):
     u, v = state
     u_dot = mu*u*(1 - u)*(u - alpha) - u*v  # Note - The cardiac version without hyperpolarization (FHN-c) has -u*v instead of -v. ID success can change depending on which variant we use.
     v_dot = eps*((beta - u)*(u - gamma) - delta*v - theta)
@@ -188,9 +188,9 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         elif fhn_name == "cardiac":
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
-        elif fhn_name == "vfa":
+        elif fhn_name == "VF4":
             params = dict(alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0)
-        elif fhn_name == "vfb":
+        elif fhn_name == "VF7":
             params = dict(alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0)
         else:
             raise ValueError("Unknown FHN variant")
@@ -203,10 +203,10 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
     elif fhn_name == "cardiac":
         u_rhs = u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
-    elif fhn_name == "vfa":
+    elif fhn_name == "VF4":
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(u*(params['beta']-u) - v)
-    elif fhn_name == "vfb":
+    elif fhn_name == "VF7":
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*((params['beta']-u)*(u-params['gamma']) - params['delta']*v - params['theta'])
     else:

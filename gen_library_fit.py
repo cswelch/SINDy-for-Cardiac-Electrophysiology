@@ -15,8 +15,10 @@ class GenLibraryFit():
         t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
         ics (1d array): Initial conditions for the FHN equations.
         color (string): Color to use for the original data in the reconstruction plots.
+        u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
+        v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
     '''
-    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue"):
+    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", u_noise=0.0, v_noise=0.0):
         # Generate data w/ standard FHN parameters
         self.t_fhn_td = t_range
         self.x_0_fhn_td = ics
@@ -40,6 +42,18 @@ class GenLibraryFit():
 
         # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
         self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
+
+        # int_u = np.trapz(y=self.states_fhn_td[:, 0], dx=0.01)
+        # print(f"Average u value: {int_u / 4000.}")
+        # int_v = np.trapz(y=self.states_fhn_td[:, 1], dx=0.01)
+        # print(f"Average v value: {int_v / 4000.}")
+
+        # Add Gaussian noise with the given std dev if nonzero values are provided.
+        if u_noise > 0.0:
+            self.states_fhn_td[:, 0] += np.random.normal(0, u_noise, self.states_fhn_td[:, 0].shape) # Add noise to u
+        if v_noise > 0.0:
+            self.states_fhn_td[:, 1] += np.random.normal(0, v_noise, self.states_fhn_td[:, 1].shape) # Add noise to v
+        
         # plt.plot(t_fhn_td, states_fhn_td[:, 0], label='u')
         self.states_fhn_td = np.concatenate((self.states_fhn_td, self.t_fhn_td.reshape(-1, 1)), axis=1)
 
@@ -131,6 +145,7 @@ class GenLibraryFit():
             self.non_aut_term_fit
         ]
 
+        # TODO Getting f_td in both u' and v' equations for cases with large dt and/or noise. How to fix?
         '''
         Create variable-specific libraries
         '''

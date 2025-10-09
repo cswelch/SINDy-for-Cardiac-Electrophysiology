@@ -1,6 +1,7 @@
 import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
+from ddeint import ddeint
 from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs
 import matplotlib.pyplot as plt
 
@@ -39,9 +40,21 @@ class GenLibraryFit():
         elif fhn_variant == "VF7":
             self.fhn_name = "VF7"
             self.fhn_variant = self.fhn_vf_7_td
+        elif fhn_variant == "standard_delayed_copy":
+            self.tau = 100 # Set the delay time for the delayed copy variant
+            self.fhn_name = "standard_delayed_copy"
+            self.fhn_variant = self.fhn_delayed_copy
 
         # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
-        self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
+        if fhn_variant != "standard_delayed_copy":
+            self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
+        else:   # For any delayed copy variant, use ddeint instead
+            fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
+            # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
+            def initial_history(t):
+                return self.x_0_fhn_td
+            
+            self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
 
         # int_u = np.trapz(y=self.states_fhn_td[:, 0], dx=0.01)
         # print(f"Average u value: {int_u / 4000.}")
@@ -88,6 +101,30 @@ class GenLibraryFit():
     # Define VF-b (VF-7) variant of FHN w/ non_aut_term_data term
     def fhn_vf_7_td(self, state, t):
         return fhn_vf_7(state, t, self.non_aut_term_data)
+    
+
+    # Define versions with v' defined as delayed version of u' equation
+    def fhn_delayed_copy(Y, t, non_aut_term, tau=1.0, alpha=0.1):
+        """
+        FHN system for ddeint where Y(t) gives current values and Y(t-tau) gives delayed values
+        """
+        u, v = Y(t)
+        
+        # Original u equation
+        u_dot = u*(1-u)*(u-alpha) - v + non_aut_term(t)
+        
+        # For v equation, we need the delayed u_dot value
+        # This requires reconstructing u_dot at time (t-tau)
+        if t >= tau:
+            u_delayed, v_delayed = Y(t - tau)
+            u_dot_delayed = u_delayed*(1-u_delayed)*(u_delayed-alpha) - v_delayed + non_aut_term(t - tau)
+        else:
+            u_dot_delayed = u_dot  # Use current value for early times
+        
+        v_dot = u_dot_delayed
+        
+        return np.array([u_dot, v_dot])
+        # return fhn_u_dot_copy(state, t, self.non_aut_term_data)
 
 
     '''
@@ -102,7 +139,7 @@ class GenLibraryFit():
         x_0 = np.concatenate((x_0, np.array([t[0]])))
         model_reconstruction = model.simulate(x_0, t, integrator='odeint')
 
-        fig, ax = plt.subplots(2, 1, figsize=(8, 8), dpi=200)
+        fig, ax = plt.subplots(2, 1, figsize=(8, 8)) # For presentations and papers, use:  figsize=(8, 8), dpi=200
         plt.tight_layout()
         plt.subplots_adjust(hspace=0.3) # Add space between the two plots
 

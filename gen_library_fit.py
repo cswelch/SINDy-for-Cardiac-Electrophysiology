@@ -41,7 +41,7 @@ class GenLibraryFit():
             self.fhn_name = "VF7"
             self.fhn_variant = self.fhn_vf_7_td
         elif fhn_variant == "standard_delayed_copy":
-            self.tau = 100 # Set the delay time for the delayed copy variant
+            self.tau = 40 # Set the delay time for the delayed copy variant
             self.fhn_name = "standard_delayed_copy"
             self.fhn_variant = self.fhn_delayed_copy
 
@@ -104,7 +104,7 @@ class GenLibraryFit():
     
 
     # Define versions with v' defined as delayed version of u' equation
-    def fhn_delayed_copy(Y, t, non_aut_term, tau=1.0, alpha=0.1):
+    def fhn_delayed_copy(Y, t, non_aut_term, tau, alpha=0.1):
         """
         FHN system for ddeint where Y(t) gives current values and Y(t-tau) gives delayed values
         """

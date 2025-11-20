@@ -44,17 +44,29 @@ class GenLibraryFit():
             self.tau = 40 # Set the delay time for the delayed copy variant
             self.fhn_name = "standard_delayed_copy"
             self.fhn_variant = self.fhn_delayed_copy
+        elif fhn_variant == "fhn_auto_osc_delayed_copy":
+            self.tau = 40 # Set the delay time for the delayed copy variant
+            self.fhn_name = "fhn_auto_osc_delayed_copy"
+            self.fhn_variant = self.fhn_auto_osc_delayed_copy
+
+        # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
+        def initial_history(t):
+            return self.x_0_fhn_td
 
         # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
-        if fhn_variant != "standard_delayed_copy":
-            self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
-        else:   # For any delayed copy variant, use ddeint instead
+        if fhn_variant == "standard_delayed_copy":
+            # Wraps additional arguments sent to delayed function
             fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
-            # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
-            def initial_history(t):
-                return self.x_0_fhn_td
-            
+            # For any delayed copy variant, use ddeint instead
             self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
+        elif fhn_variant == "fhn_auto_osc_delayed_copy":  # For non-delayed variants, use odeint
+            # Wraps additional arguments sent to delayed function
+            fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
+            self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
+        else:
+            # For non-delayed variants, use odeint
+            self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
+            
 
         # int_u = np.trapz(y=self.states_fhn_td[:, 0], dx=0.01)
         # print(f"Average u value: {int_u / 4000.}")
@@ -119,13 +131,34 @@ class GenLibraryFit():
             u_delayed, v_delayed = Y(t - tau)
             u_dot_delayed = u_delayed*(1-u_delayed)*(u_delayed-alpha) - v_delayed + non_aut_term(t - tau)
         else:
-            u_dot_delayed = u_dot  # Use current value for early times
+            u_dot_delayed = 0  # Set u' to 0 if in t range (0, tau)
         
         v_dot = u_dot_delayed
         
         return np.array([u_dot, v_dot])
         # return fhn_u_dot_copy(state, t, self.non_aut_term_data)
 
+    # Define versions with v' defined as delayed version of u' equation
+    def fhn_auto_osc_delayed_copy(Y, t, tau, alpha=0.1):
+        """
+        FHN system for ddeint where Y(t) gives current values and Y(t-tau) gives delayed values
+        """
+        u, v = Y(t)
+        
+        # Original u equation
+        u_dot = u*(1-u)*(u-alpha) - v
+        
+        # For v equation, we need the delayed u_dot value
+        # This requires reconstructing u_dot at time (t-tau)
+        if t >= tau:
+            u_delayed, v_delayed = Y(t - tau)
+            u_dot_delayed = u_delayed*(1-u_delayed)*(u_delayed-alpha) - v_delayed
+        else:
+            u_dot_delayed = 0  # Set u' to 0 if in t range (0, tau)
+        
+        v_dot = u_dot_delayed
+        
+        return np.array([u_dot, v_dot])
 
     '''
         Reconstruct the system using the fitted SINDy model and plot the results.
@@ -147,7 +180,7 @@ class GenLibraryFit():
         for i in range(model_reconstruction.shape[1] - 1):
             ax[i].plot(self.states_fhn_td[:, 2], self.states_fhn_td[:, i], label='Exact Solution', color=self.color)
             ax[i].plot(t, model_reconstruction[:,i], label='SINDy Reconstruction', color='black', linestyle='--')
-            ax[i].set_xlim(0, t[-1])
+            ax[i].set_xlim(0, 400) # t[-1]
             ax[i].set_xlabel('t')
             ax[i].set_ylabel(['u', 'v'][i])
             ax[i].set_title([f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})', f'Recovery Variable vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})'][i])

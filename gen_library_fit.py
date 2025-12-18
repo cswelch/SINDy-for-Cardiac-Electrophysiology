@@ -19,15 +19,28 @@ class GenLibraryFit():
         u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
         v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
     '''
-    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", u_noise=0.0, v_noise=0.0):
-        # Generate data w/ standard FHN parameters
+    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", 
+            t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", 
+            u_noise=0.0, v_noise=0.0, tau=None):
+        
+        # TODO Check that this addition is backwards compatible with all previous code.
+        # Initialize with Takens embedding using 5 time delays.
         self.t_fhn_td = t_range
         self.x_0_fhn_td = ics
         self.color = color
-
         self.non_aut_term_data = non_aut_term_data
         self.non_aut_term_fit = non_aut_term_fit
         
+        # Compute dt for delay calculations
+        self.dt = t_range[1] - t_range[0] if len(t_range) > 1 else 1.0
+        
+        # Auto-compute optimal delay if not provided
+        if tau is None:
+            self.tau = self._compute_delay(fhn_variant, ics, t_range[:500], 
+                                        non_aut_term_data)
+        else:
+            self.tau = tau
+                
         if fhn_variant == "standard":
             self.fhn_name = "standard"
             self.fhn_variant = self.fhn_td
@@ -41,11 +54,11 @@ class GenLibraryFit():
             self.fhn_name = "VF7"
             self.fhn_variant = self.fhn_vf_7_td
         elif fhn_variant == "standard_delayed_copy":
-            self.tau = 40 # Set the delay time for the delayed copy variant
+            self.tau = 24 # Set the delay time for the delayed copy variant
             self.fhn_name = "standard_delayed_copy"
             self.fhn_variant = self.fhn_delayed_copy
         elif fhn_variant == "fhn_auto_osc_delayed_copy":
-            self.tau = 40 # Set the delay time for the delayed copy variant
+            self.tau = 24 # Set the delay time for the delayed copy variant
             self.fhn_name = "fhn_auto_osc_delayed_copy"
             self.fhn_variant = self.fhn_auto_osc_delayed_copy
 
@@ -88,6 +101,40 @@ class GenLibraryFit():
 
 
     '''
+        Estimate optimal time delay using Average Mutual Information (AMI).
+    '''
+    # TODO Check that this addition is backwards compatible with all previous code.
+    def _compute_delay(self, fhn_variant, ics, t_short, non_aut_term):
+        # Generate short trajectory for analysis.
+        if fhn_variant == "standard":
+            fhn_func = lambda Y, t: fhn(Y, t, non_aut_term)
+        else:
+            fhn_func = lambda Y, t: fhn(Y, t, non_aut_term) # TODO Add addition variants if needed.
+        
+        u_short = odeint(fhn_func, ics, t_short)[:, 0]
+        
+        # Compute mutual information at different lags.
+        max_lag = len(u_short) // 10
+        ami = np.zeros(max_lag)
+        
+        for lag in range(1, max_lag):
+            # Simple entropy-based mutual information proxy.
+            u1 = u_short[:-lag]
+            u2 = u_short[lag:]
+            
+            # Find first minimum in AMI curve (first zero crossing).
+            correlation = np.corrcoef(u1, u2)[0, 1]
+            ami[lag] = abs(correlation)
+        
+        # First minimum gives good delay (where AMI first drops significantly).
+        first_min_idx = np.argmax(np.gradient(np.gradient(ami[:max_lag//2])))
+        optimal_delay = max(1, first_min_idx)
+        
+        # Convert from steps to time.
+        return int(optimal_delay) * self.dt
+
+
+    '''
     FitzHugh-Nagumo equations modified with an additional equation for time.
     Params:
         state (2d array):        Contains the state variables u and v
@@ -115,11 +162,11 @@ class GenLibraryFit():
         return fhn_vf_7(state, t, self.non_aut_term_data)
     
 
-    # Define versions with v' defined as delayed version of u' equation
+    '''
+        Define versions with v' defined as delayed version of u' equation. Done as FHN system to be
+        passed to ddeint where Y(t) gives current values and Y(t-tau) gives delayed values.
+    '''
     def fhn_delayed_copy(Y, t, non_aut_term, tau, alpha=0.1):
-        """
-        FHN system for ddeint where Y(t) gives current values and Y(t-tau) gives delayed values
-        """
         u, v = Y(t)
         
         # Original u equation
@@ -138,11 +185,12 @@ class GenLibraryFit():
         return np.array([u_dot, v_dot])
         # return fhn_u_dot_copy(state, t, self.non_aut_term_data)
 
+    '''
+        Define delayed copy variant for auto-oscillatory case of FHN.
+    '''
+    # TODO Finish fhn_auto_osc_delayed_copy.
     # Define versions with v' defined as delayed version of u' equation
     def fhn_auto_osc_delayed_copy(Y, t, tau, alpha=0.1):
-        """
-        FHN system for ddeint where Y(t) gives current values and Y(t-tau) gives delayed values
-        """
         u, v = Y(t)
         
         # Original u equation
@@ -255,3 +303,79 @@ class GenLibraryFit():
         self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td)
 
         return model_fhn_td
+
+
+    '''
+    Fit SINDy using Takens time-delay embedding with 5 dimensions.
+    Reconstructs the 2D phase space from a single measured variable u.
+    '''
+    # TODO Figure out how to compare output with single-shift ID results.
+    def fit_takens(self):
+        # 1. Extract measured variable u (ignore v)
+        u = self.states_fhn_td[:, 0]
+        t = self.t_fhn_td
+        
+        # 2. Compute delay index
+        delay_idx = int(np.round(self.tau / self.dt))
+        delay_idx = max(1, min(delay_idx, len(u) // 6))  # Sanity check
+        
+        # 3. Create 5-dimensional embedding: [u(t), u(t-τ), u(t-2τ), u(t-3τ), u(t-4τ)]
+        n_embed = 5
+        total_delay = (n_embed - 1) * delay_idx
+        
+        # Initialize embedded state matrix
+        n_samples = len(u) - total_delay
+        X_embedded = np.zeros((n_samples, n_embed + 1))  # +1 for time
+        
+        for i in range(n_embed):
+            idx = total_delay - i * delay_idx
+            X_embedded[:, i] = u[idx:idx + n_samples]
+        
+        X_embedded[:, n_embed] = t[total_delay:total_delay + n_samples]
+        
+        # 4. Create feature names for embedded dimensions
+        feature_names = [f"u(t-{i*delay_idx})" for i in range(n_embed)] + ["t"]
+        
+        # 5. Build library for 5D embedding
+        # Polynomial library up to degree 3 for u terms
+        embed_library = ps.PolynomialLibrary(degree=3)
+        
+        # Time-dependent forcing terms
+        t_functions = [
+            lambda t: 1.0,
+            self.non_aut_term_fit
+        ]
+        t_library = ps.CustomLibrary(
+            library_functions=t_functions,
+            function_names=[lambda t: '1', lambda t: 'I(t)']
+        )
+        
+        # 6. Combine with GeneralizedLibrary
+        # Apply embedding library to first 5 features (u dimensions)
+        # Apply time library to last feature (t)
+        inputs_per_library = np.array([
+            [0, 1, 2, 3, 4],  # embed_library acts on all u dimensions
+            [5, 5, 5, 5, 5]            # t_library acts on time
+        ])
+        
+        gen_library = ps.GeneralizedLibrary(
+            [embed_library, t_library],
+            inputs_per_library=inputs_per_library
+        )
+        
+        # 7. Fit SINDy model
+        model = ps.SINDy(
+            feature_names=feature_names,
+            feature_library=gen_library,
+            optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)
+        )
+        
+        model.fit(X_embedded, t=t[total_delay:total_delay + n_samples])
+        
+        # 8. Print results
+        print("\n--- SINDy with Takens Embedding (5 dimensions) ---")
+        print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
+        print(f"Embedding dimension = {n_embed}")
+        model.print()
+        
+        return model

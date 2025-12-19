@@ -23,7 +23,6 @@ class GenLibraryFit():
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", 
             u_noise=0.0, v_noise=0.0, tau=None):
         
-        # TODO Check that this addition is backwards compatible with all previous code.
         # Initialize with Takens embedding using 5 time delays.
         self.t_fhn_td = t_range
         self.x_0_fhn_td = ics
@@ -103,13 +102,12 @@ class GenLibraryFit():
     '''
         Estimate optimal time delay using Average Mutual Information (AMI).
     '''
-    # TODO Check that this addition is backwards compatible with all previous code.
     def _compute_delay(self, fhn_variant, ics, t_short, non_aut_term):
         # Generate short trajectory for analysis.
         if fhn_variant == "standard":
             fhn_func = lambda Y, t: fhn(Y, t, non_aut_term)
         else:
-            fhn_func = lambda Y, t: fhn(Y, t, non_aut_term) # TODO Add addition variants if needed.
+            fhn_func = lambda Y, t: fhn(Y, t, non_aut_term) # TODO Add additional variants if needed.
         
         u_short = odeint(fhn_func, ics, t_short)[:, 0]
         
@@ -379,7 +377,6 @@ class GenLibraryFit():
         Fit SINDy using only the u variable by embedding into (u, u_dot) space.
         Mathematically, FHN can be written as a 2nd order ODE for u.
     '''
-    # TODO Figure out why this isn't running.
     def fit_latent_ODE(self):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u_obs = self.states_fhn_td[:, 0]
@@ -422,6 +419,7 @@ class GenLibraryFit():
             function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')']
         )
 
+        # TODO Figure out inputs_per_library mapping error; is it wrong somehow?
         # Map libraries to inputs as follows:
         inputs_per_library = np.array([
             [0, 1, 1], # state_library: (u, u_dot) correspond to inputs 0 and 1

@@ -311,19 +311,19 @@ class GenLibraryFit():
     '''
     # TODO Figure out how to compare output with single-shift ID results.
     def fit_takens(self):
-        # 1. Extract measured variable u (ignore v)
+        # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
         
-        # 2. Compute delay index
+        # Compute delay indices.
         delay_idx = int(np.round(self.tau / self.dt))
         delay_idx = max(1, min(delay_idx, len(u) // 6))  # Sanity check
         
-        # 3. Create 5-dimensional embedding: [u(t), u(t-τ), u(t-2τ), u(t-3τ), u(t-4τ)]
+        # Define our 5-dimensional embedding by [u(t), u(t-τ), u(t-2τ), u(t-3τ), u(t-4τ)].
         n_embed = 5
         total_delay = (n_embed - 1) * delay_idx
         
-        # Initialize embedded state matrix
+        # Initialize embedded state matrix.
         n_samples = len(u) - total_delay
         X_embedded = np.zeros((n_samples, n_embed + 1))  # +1 for time
         
@@ -333,37 +333,32 @@ class GenLibraryFit():
         
         X_embedded[:, n_embed] = t[total_delay:total_delay + n_samples]
         
-        # 4. Create feature names for embedded dimensions
         feature_names = [f"u(t-{i*delay_idx})" for i in range(n_embed)] + ["t"]
         
-        # 5. Build library for 5D embedding
-        # Polynomial library up to degree 3 for u terms
+        # --- Build polynomial library for 5D embedding with up to degree 3 for u terms. ---
         embed_library = ps.PolynomialLibrary(degree=3)
         
-        # Time-dependent forcing terms
+        # --- Build library of time-dependent terms. ---
         t_functions = [
             lambda t: 1.0,
             self.non_aut_term_fit
         ]
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
-            function_names=[lambda t: '1', lambda t: 'I(t)']
+            function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')']
         )
         
-        # 6. Combine with GeneralizedLibrary
-        # Apply embedding library to first 5 features (u dimensions)
-        # Apply time library to last feature (t)
+        # Combine libraries with GeneralizedLibrary.
         inputs_per_library = np.array([
-            [0, 1, 2, 3, 4],  # embed_library acts on all u dimensions
-            [5, 5, 5, 5, 5]            # t_library acts on time
+            [0, 1, 2, 3, 4], # Apply embedding library to first 5 features (u dimensions)
+            [5, 5, 5, 5, 5]  # Apply time library to last feature (t)
         ])
-        
         gen_library = ps.GeneralizedLibrary(
             [embed_library, t_library],
             inputs_per_library=inputs_per_library
         )
         
-        # 7. Fit SINDy model
+        # Fit SINDy model.
         model = ps.SINDy(
             feature_names=feature_names,
             feature_library=gen_library,
@@ -372,10 +367,85 @@ class GenLibraryFit():
         
         model.fit(X_embedded, t=t[total_delay:total_delay + n_samples])
         
-        # 8. Print results
         print("\n--- SINDy with Takens Embedding (5 dimensions) ---")
         print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
         print(f"Embedding dimension = {n_embed}")
         model.print()
         
         return model
+    
+
+    '''
+        Fit SINDy using only the u variable by embedding into (u, u_dot) space.
+        Mathematically, FHN can be written as a 2nd order ODE for u.
+    '''
+    # TODO Figure out why this isn't running.
+    def fit_latent_ODE(self):
+        # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
+        u_obs = self.states_fhn_td[:, 0]
+        t = self.t_fhn_td
+        
+        # Compute u_dot numerically to form the embedded state X = [u, u_dot] using PySINDy's built-in differentiation method.
+        diff_method = ps.FiniteDifference() 
+        u_dot_obs = diff_method._differentiate(u_obs, t=t)
+        
+        # Create new state [u, u_dot], appending t to the end for the library generation.
+        X_embedded = np.stack([u_obs, u_dot_obs], axis=1)
+        X_with_time = np.concatenate((X_embedded, t.reshape(-1, 1)), axis=1)
+        
+        # --- Build library for state variables u, u_dot (indices 0 and 1). ---
+        state_functions = [
+            lambda u: u,
+            lambda u: u**3,
+            lambda u_dot: u_dot,
+            lambda u, u_dot: u**2 * u_dot,
+            lambda u, u_dot: u * u_dot
+        ]
+        state_library = ps.CustomLibrary(
+            library_functions=state_functions,
+            function_names=[
+                lambda u: u, 
+                lambda u: u + '^3', 
+                lambda u_dot: u_dot, 
+                lambda u, u_dot: u + '^2*' + u_dot,
+                lambda u, u_dot: u + '*' + u_dot
+            ]
+        )
+
+        # --- Build library for Time/Forcing (index 2). ---
+        t_functions = [
+            lambda t: 1.0,
+            self.non_aut_term_fit 
+        ]
+        t_library = ps.CustomLibrary(
+            library_functions=t_functions,
+            function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')']
+        )
+
+        # Map libraries to inputs as follows:
+        inputs_per_library = np.array([
+            [0, 1, 1], # state_library: (u, u_dot) correspond to inputs 0 and 1
+            [2, 2, 2]  # t_library: t corresponds to input 2
+        ])
+        
+        gen_library = ps.GeneralizedLibrary(
+            [state_library, t_library], 
+            inputs_per_library=inputs_per_library
+        )
+
+        # Fit SINDy model.
+        #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 
+        #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
+        optimizer = ps.SSR(alpha=1e-5, normalize_columns=True)
+        model_latent = ps.SINDy(
+            feature_names=["u", "u_dot", "t"], 
+            feature_library=gen_library, 
+            optimizer=optimizer
+        )
+        
+        model_latent.fit(X_embedded, t=t) # Pass X_embedded (2 cols); t handles implicit time column usage.
+        
+        print("Identified Latent Model (u, u_dot):")
+        model_latent.print()
+        
+        return model_latent

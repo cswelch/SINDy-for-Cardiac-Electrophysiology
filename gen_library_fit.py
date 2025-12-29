@@ -412,7 +412,7 @@ class GenLibraryFit():
         # --- Build library for Time/Forcing (index 2). ---
         t_functions = [
             lambda t: 1.0,
-            self.non_aut_term_fit 
+            self.non_aut_term_fit
         ]
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
@@ -421,6 +421,7 @@ class GenLibraryFit():
 
         # TODO Figure out inputs_per_library mapping error; is it wrong somehow?
         # Map libraries to inputs as follows:
+        # TODO Problem: n_features = 2 for some reason when it should be 3.
         inputs_per_library = np.array([
             [0, 1, 1], # state_library: (u, u_dot) correspond to inputs 0 and 1
             [2, 2, 2]  # t_library: t corresponds to input 2
@@ -440,9 +441,14 @@ class GenLibraryFit():
             feature_library=gen_library, 
             optimizer=optimizer
         )
+
+        # # Print number of features
+        # print(f"Number of features in state library: {state_library.}")
+        # print(f"Number of features in time library: {t_library.n_output_features_}")
+        # print(f"Number of features in generalized library: {gen_library.n_output_features_}")
         
         model_latent.fit(X_embedded, t=t) # Pass X_embedded (2 cols); t handles implicit time column usage.
-        
+
         print("Identified Latent Model (u, u_dot):")
         model_latent.print()
         

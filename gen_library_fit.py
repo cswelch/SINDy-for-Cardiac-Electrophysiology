@@ -285,11 +285,6 @@ class GenLibraryFit():
                                        [2,2,2]])
         gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
-
-        # TODO Is there any use for fit / transform here?
-        # out = gen_library.fit(self.states_fhn_td)
-        # out = gen_library.transform(self.states_fhn_td)
-
         # Do the SINDy fit
         model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td)

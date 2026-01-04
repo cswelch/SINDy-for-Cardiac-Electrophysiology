@@ -389,16 +389,14 @@ class GenLibraryFit():
         state_functions = [
             lambda u: u,
             lambda u: u**3,
-            lambda u_dot: u_dot,
             lambda u, u_dot: u**2 * u_dot,
             lambda u, u_dot: u * u_dot
         ]
         state_library = ps.CustomLibrary(
             library_functions=state_functions,
             function_names=[
-                lambda u: u, 
+                lambda u: u,
                 lambda u: u + '^3', 
-                lambda u_dot: u_dot, 
                 lambda u, u_dot: u + '^2*' + u_dot,
                 lambda u, u_dot: u + '*' + u_dot
             ]

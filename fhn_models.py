@@ -89,6 +89,7 @@ def fhn_vf_7(state, t, non_aut_term, alpha = 0.2, beta = 1.1, gamma = 0.31, delt
     return u_dot, v_dot
 
 
+# TODO Figure out how to make this handle 2nd-order L-ODE forms to compare exact coefficients automatically.
 '''
 Generate bar chart to compare the exact and fit SINDy coefficients for the given SINDy model. Also perform a checksum on the number of terms.
 Returns:

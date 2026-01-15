@@ -76,7 +76,7 @@ class GenLibraryFit():
             fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
             self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
         else:
-            # For non-delayed variants, use odeint
+            # For non-delayed variants (i.e., "standard" + "cardiac" + "VF4" + "VF7"), use odeint
             self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
             
 
@@ -385,20 +385,23 @@ class GenLibraryFit():
         X_embedded = np.stack([u_obs, u_dot_obs], axis=1)
         X_with_time = np.concatenate((X_embedded, t.reshape(-1, 1)), axis=1)
         
+        # TODO Still missing terms from L-ODE formulation — both I(t) and I'(t) needed?
         # --- Build library for state variables u, u_dot (indices 0 and 1). ---
         state_functions = [
             lambda u: u,
+            lambda u: u**2,
             lambda u: u**3,
-            lambda u, u_dot: u**2 * u_dot,
-            lambda u, u_dot: u * u_dot
+            lambda u, u_dot: u * u_dot,
+            lambda u, u_dot: u**2 * u_dot
         ]
         state_library = ps.CustomLibrary(
             library_functions=state_functions,
             function_names=[
                 lambda u: u,
+                lambda u: u + '^2',
                 lambda u: u + '^3', 
-                lambda u, u_dot: u + '^2*' + u_dot,
-                lambda u, u_dot: u + '*' + u_dot
+                lambda u, u_dot: u + '*' + u_dot,
+                lambda u, u_dot: u + '^2*' + u_dot
             ]
         )
 

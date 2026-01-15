@@ -386,26 +386,46 @@ class GenLibraryFit():
         X_with_time = np.concatenate((X_embedded, t.reshape(-1, 1)), axis=1)
         
         # TODO Still missing terms from L-ODE formulation — both I(t) and I'(t) needed?
-        # --- Build library for state variables u, u_dot (indices 0 and 1). ---
-        state_functions = [
+        # --- Build library for u only (index 0) ---
+        u_only_functions = [
             lambda u: u,
             lambda u: u**2,
-            lambda u: u**3,
-            lambda u, u_dot: u * u_dot,
-            lambda u, u_dot: u**2 * u_dot
+            lambda u: u**3
         ]
-        state_library = ps.CustomLibrary(
-            library_functions=state_functions,
+        u_only_library = ps.CustomLibrary(
+            library_functions=u_only_functions,
             function_names=[
                 lambda u: u,
                 lambda u: u + '^2',
-                lambda u: u + '^3', 
+                lambda u: u + '^3'
+            ]
+        )
+
+        # --- Build library for u_dot only (index 1) ---
+        u_dot_only_functions = [
+            lambda u_dot: u_dot
+        ]
+        u_dot_only_library = ps.CustomLibrary(
+            library_functions=u_dot_only_functions,
+            function_names=[
+                lambda u_dot: u_dot
+            ]
+        )
+
+        # --- Build library for u and u_dot (indices 0 and 1, respectively) ---
+        u_and_u_dot_functions = [
+            lambda u, u_dot: u * u_dot,
+            lambda u, u_dot: u**2 * u_dot
+        ]
+        u_and_u_dot_library = ps.CustomLibrary(
+            library_functions=u_and_u_dot_functions,
+            function_names=[
                 lambda u, u_dot: u + '*' + u_dot,
                 lambda u, u_dot: u + '^2*' + u_dot
             ]
         )
 
-        # --- Build library for Time/Forcing (index 2). ---
+        # --- Build library for time (index 2) to include forcing terms ---
         t_functions = [
             lambda t: 1.0,
             self.non_aut_term_fit
@@ -417,12 +437,14 @@ class GenLibraryFit():
 
         # Map libraries to inputs as follows:
         inputs_per_library = np.array([
-            [0, 1, 1], # state_library: (u, u_dot) correspond to inputs 0 and 1
+            [0, 0, 0], # u_only_library: u corresponds to input 0
+            [1, 1, 1], # u_dot_only_library: u_dot corresponds to input 1
+            [0, 1, 1], # u_and_u_dot_library: (u, u_dot) correspond to inputs 0 and 1, respectively
             [2, 2, 2]  # t_library: t corresponds to input 2
         ])
         
         gen_library = ps.GeneralizedLibrary(
-            [state_library, t_library], 
+            [u_only_library, u_dot_only_library, u_and_u_dot_library, t_library], 
             inputs_per_library=inputs_per_library
         )
 
@@ -436,14 +458,15 @@ class GenLibraryFit():
             optimizer=optimizer
         )
 
-        # TODO Debugging
-        # Print number of features
-        # print(f"Number of features in state library: {state_library.}")
+        model_latent.fit(X_with_time, t=t) # Pass X_with_time (3 cols); t handles implicit time column usage.
+
+        # Debugging — Print number of features for each library and shape of the input data
+        # print(f"Number of features in u_only library: {u_only_library.n_output_features_}")
+        # print(f"Number of features in u_and_u_dot library: {u_and_u_dot_library.n_output_features_}")
         # print(f"Number of features in time library: {t_library.n_output_features_}")
         # print(f"Number of features in generalized library: {gen_library.n_output_features_}")
         # print(X_with_time.shape)
         # print(t.shape)
-        model_latent.fit(X_with_time, t=t) # Pass X_with_time (3 cols); t handles implicit time column usage.
 
         print("Identified Latent Model (u, u_dot):")
         model_latent.print()

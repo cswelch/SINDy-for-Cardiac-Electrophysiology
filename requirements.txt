@@ -1,0 +1,10 @@
+numpy
+scipy
+matplotlib
+pandas
+pysindy
+sympy
+scikit-learn
+ddeint
+jupyter
+plotly

@@ -281,13 +281,15 @@ class GenLibraryFit():
             t_library: Contains only functions of feature 2 (t)
         At the moment, we don't specify in which equations (e.g., u_dot, v_dot) each variable can be used.
         '''
-        inputs_per_library = np.array([[0,1,1], 
-                                       [2,2,2]])
+        inputs_per_library = [
+            [0,1,1], 
+            [2,2,2]
+        ]
         gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
         # Do the SINDy fit
-        model_fhn_td = ps.SINDy(feature_names=["u", "v", "t"], feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
-        model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td)
+        model_fhn_td = ps.SINDy(feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
+        model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=["u", "v", "t"])
 
         # Create bar chart comparison between SINDy and exact coefficients.
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
@@ -342,10 +344,10 @@ class GenLibraryFit():
         )
         
         # Combine libraries with GeneralizedLibrary.
-        inputs_per_library = np.array([
+        inputs_per_library = [
             [0, 1, 2, 3, 4], # Apply embedding library to first 5 features (u dimensions)
             [5, 5, 5, 5, 5]  # Apply time library to last feature (t)
-        ])
+        ]
         gen_library = ps.GeneralizedLibrary(
             [embed_library, t_library],
             inputs_per_library=inputs_per_library
@@ -353,12 +355,11 @@ class GenLibraryFit():
         
         # Fit SINDy model.
         model = ps.SINDy(
-            feature_names=feature_names,
             feature_library=gen_library,
             optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)
         )
         
-        model.fit(X_embedded, t=t[total_delay:total_delay + n_samples])
+        model.fit(X_embedded, t=t[total_delay:total_delay + n_samples], feature_names=feature_names)
         
         print("\n--- SINDy with Takens Embedding (5 dimensions) ---")
         print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
@@ -436,12 +437,12 @@ class GenLibraryFit():
         )
 
         # Map libraries to inputs as follows:
-        inputs_per_library = np.array([
+        inputs_per_library = [
             [0, 0, 0], # u_only_library: u corresponds to input 0
             [1, 1, 1], # u_dot_only_library: u_dot corresponds to input 1
             [0, 1, 1], # u_and_u_dot_library: (u, u_dot) correspond to inputs 0 and 1, respectively
             [2, 2, 2]  # t_library: t corresponds to input 2
-        ])
+        ]
         
         gen_library = ps.GeneralizedLibrary(
             [u_only_library, u_dot_only_library, u_and_u_dot_library, t_library], 
@@ -453,12 +454,11 @@ class GenLibraryFit():
         #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
         optimizer = ps.SSR(alpha=1e-5, normalize_columns=True)
         model_latent = ps.SINDy(
-            feature_names=["u", "u_dot", "t"], 
             feature_library=gen_library, 
-            optimizer=optimizer
+            optimizer=optimizer,
         )
 
-        model_latent.fit(X_with_time, t=t) # Pass X_with_time (3 cols); t handles implicit time column usage.
+        model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
 
         # Debugging — Print number of features for each library and shape of the input data
         # print(f"Number of features in u_only library: {u_only_library.n_output_features_}")

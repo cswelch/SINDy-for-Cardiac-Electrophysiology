@@ -378,9 +378,15 @@ class GenLibraryFit():
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u_obs = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
+
+        # Debugging plots
+        plt.plot(t, u_obs)
+        plt.xlabel('t')
+        plt.ylabel(r'$u_{obs}$')
+        plt.title('PySINDy Input Data')
         
         # Compute u_dot numerically to form the embedded state X = [u, u_dot] using PySINDy's built-in differentiation method.
-        diff_method = ps.FiniteDifference() 
+        diff_method = ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 5}) # Window length should be an odd number (results may be unexpected if even)
         u_dot_obs = diff_method._differentiate(u_obs, t=t)
         
         # Create new state [u, u_dot], appending t to the end for the library generation.
@@ -430,11 +436,21 @@ class GenLibraryFit():
         # --- Build library for time (index 2) to include forcing terms ---
         t_functions = [
             lambda t: 1.0,
-            self.non_aut_term_fit
         ]
+        t_names = [
+            lambda t: 1, 
+        ]
+
+        # We should only include non_aut_term_fit in the library if it's nontrivial. If it's 0, it can result
+        # in SVD convergence errors when ps.SINDy.fit().
+        test_vals = self.non_aut_term_fit(np.array([1.0, 1.e1, 1.e2, 1.e3]))
+        if ( np.any( np.abs(test_vals) ) > 1e-12 ):
+            t_functions.append(self.non_aut_term_fit)
+            t_names.append(lambda t: 'f_td(' + t + ')')
+
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
-            function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')']
+            function_names=t_names
         )
 
         # Map libraries to inputs as follows:
@@ -457,8 +473,9 @@ class GenLibraryFit():
         model_latent = ps.SINDy(
             feature_library=gen_library, 
             optimizer=optimizer,
-            differentiation_method=ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 11})
+            differentiation_method=ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 5}) # Window length should be an odd number (results may be unexpected if even)
         )
+        print('Differentiation method parameters: ', model_latent.differentiation_method.get_params())
 
         model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
 

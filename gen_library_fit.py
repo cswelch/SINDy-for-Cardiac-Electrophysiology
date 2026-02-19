@@ -356,7 +356,8 @@ class GenLibraryFit():
         # Fit SINDy model.
         model = ps.SINDy(
             feature_library=gen_library,
-            optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)
+            optimizer=ps.SSR(alpha=1e-5, normalize_columns=True),
+            differentiation_method=ps.differentiation.SmoothedFiniteDifference()
         )
         
         model.fit(X_embedded, t=t[total_delay:total_delay + n_samples], feature_names=feature_names)
@@ -456,6 +457,7 @@ class GenLibraryFit():
         model_latent = ps.SINDy(
             feature_library=gen_library, 
             optimizer=optimizer,
+            differentiation_method=ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 11})
         )
 
         model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.

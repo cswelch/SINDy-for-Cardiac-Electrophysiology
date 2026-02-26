@@ -373,8 +373,10 @@ class GenLibraryFit():
     '''
         Fit SINDy using only the u variable by embedding into (u, u_dot) space.
         Mathematically, FHN can be written as a 2nd order ODE for u.
+        Params:
+            is_weak (bool): True specifies use of weak formulation for each of the 4 libraries; false uses normal CustomLibrary implementations.
     '''
-    def fit_latent_ODE(self):
+    def fit_latent_ODE(self, is_weak=False):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u_obs = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -408,6 +410,15 @@ class GenLibraryFit():
                 lambda u: u + '^3'
             ]
         )
+        # Use weak formulation if specified.
+        if (is_weak):
+            weak_u_library = ps.WeakPDELibrary(
+            function_library=u_only_library,
+            spatiotemporal_grid=t,
+            is_uniform=True,
+            K=100
+            )
+            
 
         # --- Build library for u_dot only (index 1) ---
         u_dot_only_functions = [
@@ -419,6 +430,15 @@ class GenLibraryFit():
                 lambda u_dot: u_dot
             ]
         )
+        # Use weak formulation if specified.
+        if (is_weak):
+            weak_u_dot_library = ps.WeakPDELibrary(
+            function_library=u_dot_only_library,
+            spatiotemporal_grid=t,
+            is_uniform=True,
+            K=100
+            )
+
 
         # --- Build library for u and u_dot (indices 0 and 1, respectively) ---
         u_and_u_dot_functions = [
@@ -432,6 +452,14 @@ class GenLibraryFit():
                 lambda u, u_dot: u + '^2*' + u_dot
             ]
         )
+        # Use weak formulation if specified.
+        if (is_weak):
+            weak_u_and_u_dot_library = ps.WeakPDELibrary(
+            function_library=u_and_u_dot_library,
+            spatiotemporal_grid=t,
+            is_uniform=True,
+            K=100
+            )
 
         # --- Build library for time (index 2) to include forcing terms ---
         t_functions = [
@@ -440,18 +468,25 @@ class GenLibraryFit():
         t_names = [
             lambda t: 1, 
         ]
-
         # We should only include non_aut_term_fit in the library if it's nontrivial. If it's 0, it can result
         # in SVD convergence errors when ps.SINDy.fit().
         test_vals = self.non_aut_term_fit(np.array([1.0, 1.e1, 1.e2, 1.e3]))
         if ( np.any( np.abs(test_vals) ) > 1e-12 ):
             t_functions.append(self.non_aut_term_fit)
             t_names.append(lambda t: 'f_td(' + t + ')')
-
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
             function_names=t_names
         )
+        # Use weak formulation if specified.
+        if (is_weak):
+            weak_t_library = ps.WeakPDELibrary(
+            function_library=t_library,
+            spatiotemporal_grid=t,
+            is_uniform=True,
+            K=100
+            )
+
 
         # Map libraries to inputs as follows:
         inputs_per_library = [
@@ -461,10 +496,19 @@ class GenLibraryFit():
             [2, 2, 2]  # t_library: t corresponds to input 2
         ]
         
-        gen_library = ps.GeneralizedLibrary(
-            [u_only_library, u_dot_only_library, u_and_u_dot_library, t_library], 
+
+        # Create GeneralizedLibrary() from WeakPDELibrary() instances if applicable; otherwise, simply combine CustomLibrary() instances.
+        if (is_weak):
+            gen_library = ps.GeneralizedLibrary(
+            [weak_u_library, weak_u_dot_library, weak_u_and_u_dot_library, weak_t_library], 
             inputs_per_library=inputs_per_library
-        )
+            )
+        else:
+            gen_library = ps.GeneralizedLibrary(
+                [u_only_library, u_dot_only_library, u_and_u_dot_library, t_library], 
+                inputs_per_library=inputs_per_library
+            )
+
 
         # Fit SINDy model.
         #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 

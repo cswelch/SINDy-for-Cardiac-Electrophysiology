@@ -515,10 +515,27 @@ class GenLibraryFit():
             )
 
 
+        # TODO Test other optimizers like LASSO and STLSQ and comparing them to SSR
+        # lambdas = np.arange(0.01,0.11,0.01)
+        # for lam in lambdas:
+
+        #     optimizer = ps.SSR(alpha=1e-5, normalize_columns=True)
+        #     cur_model_latent = ps.SINDy(
+        #         feature_library=gen_library, 
+        #         optimizer=optimizer,
+        #         differentiation_method=ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 5}) # Window length should be an odd number (results may be unexpected if even)
+        #     )
+        #     print('Differentiation method parameters: ', cur_model_latent.differentiation_method.get_params())
+
+        #     cur_model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
+
+        #     # Save only if it beats all other fits
+        #     if (cur_mse > last_mse):
+
         # Fit SINDy model.
         #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 
         #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
-        optimizer = ps.SSR(alpha=1e-5, normalize_columns=True)
+        optimizer = ps.SSR(alpha=1e-5, normalize_columns=True) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
         model_latent = ps.SINDy(
             feature_library=gen_library, 
             optimizer=optimizer,

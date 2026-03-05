@@ -107,6 +107,7 @@ def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_
     coef_sindy = model.coefficients()
     coef_exact = get_fhn_exact_coeffs(fhn_name=fhn_name, monomial_names=monomial_names)
 
+    # TODO Handle different u', v' names for L-ODE case?
     # Compare number of terms in the SINDy model to the exact coefficients.
     tol = 10**(-precision)
     print(f"Number of SINDy terms for u\', v\': ({np.sum(np.abs(coef_sindy[0]) > tol)}, {np.sum(np.abs(coef_sindy[1]) > tol)})")
@@ -195,6 +196,8 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
             params = dict(alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0)
         elif fhn_name == "standard_delayed_copy":
             pass    # No parameters needed for this variant — defined in gen_library_fit.
+        elif fhn_name == "fhn_lode":
+            params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         else:
             raise ValueError("Unknown FHN variant")
 
@@ -216,6 +219,41 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
         # This variant includes a delayed copy of u in the u' equation. The delay is handled in gen_library_fit.
         u_rhs = u*(1-u)*(u-0.1) - v + f_td  # Using standard FHN parameters.
         v_rhs = u*(1-u)*(u-0.1) - v + f_td  # Duplicate of u' equation (missing time delay)
+    elif fhn_name == "fhn_lode":
+        # L-ODE formulation: eliminates v from standard FHN to get a 2nd-order ODE for u.
+        # Returns coefficients for (u_dot, u_dot_dot) instead of (u_dot, v_dot).
+        u_dot_sym = sym.Symbol('u_dot')
+        f_td_dot = sym.Symbol('f_td_dot')
+
+        # First eqn. (trivial): u_dot = u_dot
+        u_dot_rhs = u_dot_sym
+
+        # 2nd-order L-ODE eqn. (derived by eliminating v from standard FHN)
+        u_dot_dot_rhs = (
+            -3*u**2*u_dot_sym
+            + 2*(params['alpha'] + 1)*u*u_dot_sym
+            - (params['alpha'] + params['eps']*params['gamma'])*u_dot_sym
+            - params['eps']*params['gamma']*u**3
+            + params['eps']*params['gamma']*(params['alpha'] + 1)*u**2
+            - params['eps']*(params['gamma']*params['alpha'] + params['beta'])*u
+            + params['eps']*params['delta']
+            + params['eps']*params['gamma']*f_td
+            + f_td_dot
+        )
+
+        # Replace '^' with '**' in monomial names for compatibility w/ SymPy; fit_latent_ODE uses '^' notation
+        monomial_names = [m.replace('^', '**') for m in monomial_names]
+
+        # Expand and extract coefficients using (u, u_dot, f_td, f_td_dot) as generators instead of (u, v, f_td)
+        u_dot_rhs_exp = sym.expand(u_dot_rhs).as_poly(u, u_dot_sym, f_td, f_td_dot)
+        u_dot_dot_rhs_exp = sym.expand(u_dot_dot_rhs).as_poly(u, u_dot_sym, f_td, f_td_dot)
+
+        m_sym = [sym.sympify(m) for m in monomial_names]
+
+        u_dot_coeffs = [float(u_dot_rhs_exp.coeff_monomial(m)) for m in m_sym]
+        u_dot_dot_coeffs = [float(u_dot_dot_rhs_exp.coeff_monomial(m)) for m in m_sym]
+
+        return np.array([u_dot_coeffs, u_dot_dot_coeffs])
     else:
         raise ValueError("Unknown FHN variant")
 

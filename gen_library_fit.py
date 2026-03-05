@@ -60,6 +60,9 @@ class GenLibraryFit():
             self.tau = 24 # Set the delay time for the delayed copy variant
             self.fhn_name = "fhn_auto_osc_delayed_copy"
             self.fhn_variant = self.fhn_auto_osc_delayed_copy
+        elif fhn_variant == "fhn_lode": # The L-ODE variant used in fit_latent_ode() generates with the same FHN data but needs a different name
+            self.fhn_name = "fhn_lode"
+            self.fhn_variant = self.fhn_td
 
         # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
         def initial_history(t):
@@ -268,7 +271,7 @@ class GenLibraryFit():
         u_v_library = ps.CustomLibrary(library_functions=u_v_functions,
                                             function_names=[lambda u: u, lambda u: u + '^2', lambda u: u + '^3', lambda u, v: u + '*' + v])
         t_library = ps.CustomLibrary(library_functions=t_functions,
-                                            function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')'])
+                                            function_names=[lambda t: '1', lambda t: 'f_td(' + t + ')'])
         
         # TODO Specify that t terms can only be in the u_dot and t_dot equations.
         '''
@@ -340,7 +343,7 @@ class GenLibraryFit():
         ]
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
-            function_names=[lambda t: 1, lambda t: 'f_td(' + t + ')']
+            function_names=[lambda t: '1', lambda t: 'f_td(' + t + ')']
         )
         
         # Combine libraries with GeneralizedLibrary.
@@ -395,6 +398,7 @@ class GenLibraryFit():
         X_embedded = np.stack([u_obs, u_dot_obs], axis=1)
         X_with_time = np.concatenate((X_embedded, t.reshape(-1, 1)), axis=1)
         
+
         # TODO Still missing terms from L-ODE formulation — both I(t) and I'(t) needed?
         # --- Build library for u only (index 0) ---
         u_only_functions = [
@@ -418,7 +422,7 @@ class GenLibraryFit():
             is_uniform=True,
             K=100
             )
-            
+
 
         # --- Build library for u_dot only (index 1) ---
         u_dot_only_functions = [
@@ -461,12 +465,13 @@ class GenLibraryFit():
             K=100
             )
 
+
         # --- Build library for time (index 2) to include forcing terms ---
         t_functions = [
             lambda t: 1.0,
         ]
         t_names = [
-            lambda t: 1, 
+            lambda t: '1', 
         ]
         # We should only include non_aut_term_fit in the library if it's nontrivial. If it's 0, it can result
         # in SVD convergence errors when ps.SINDy.fit().
@@ -530,6 +535,9 @@ class GenLibraryFit():
         # print(f"Number of features in generalized library: {gen_library.n_output_features_}")
         # print(X_with_time.shape)
         # print(t.shape)
+
+        # Create bar chart comparison between SINDy and exact coefficients.
+        compare_exact_and_sindy_coeffs(model_latent, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
 
         print("Identified Latent Model (u, u_dot):")
         model_latent.print()

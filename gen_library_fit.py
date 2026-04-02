@@ -414,14 +414,6 @@ class GenLibraryFit():
                 lambda u: u + '^3'
             ]
         )
-        # Use weak formulation if specified.
-        if (is_weak):
-            weak_u_library = ps.WeakPDELibrary(
-            function_library=u_only_library,
-            spatiotemporal_grid=t,
-            is_uniform=True,
-            K=100
-            )
 
 
         # --- Build library for u_dot only (index 1) ---
@@ -434,14 +426,6 @@ class GenLibraryFit():
                 lambda u_dot: u_dot
             ]
         )
-        # Use weak formulation if specified.
-        if (is_weak):
-            weak_u_dot_library = ps.WeakPDELibrary(
-            function_library=u_dot_only_library,
-            spatiotemporal_grid=t,
-            is_uniform=True,
-            K=100
-            )
 
 
         # --- Build library for u and u_dot (indices 0 and 1, respectively) ---
@@ -456,14 +440,6 @@ class GenLibraryFit():
                 lambda u, u_dot: u + '^2*' + u_dot
             ]
         )
-        # Use weak formulation if specified.
-        if (is_weak):
-            weak_u_and_u_dot_library = ps.WeakPDELibrary(
-            function_library=u_and_u_dot_library,
-            spatiotemporal_grid=t,
-            is_uniform=True,
-            K=100
-            )
 
 
         # --- Build library for time (index 2) to include forcing terms ---
@@ -483,14 +459,6 @@ class GenLibraryFit():
             library_functions=t_functions,
             function_names=t_names
         )
-        # Use weak formulation if specified.
-        if (is_weak):
-            weak_t_library = ps.WeakPDELibrary(
-            function_library=t_library,
-            spatiotemporal_grid=t,
-            is_uniform=True,
-            K=100
-            )
 
 
         # Map libraries to inputs as follows:
@@ -502,17 +470,47 @@ class GenLibraryFit():
         ]
         
 
-        # Create GeneralizedLibrary() from WeakPDELibrary() instances if applicable; otherwise, simply combine CustomLibrary() instances.
-        if (is_weak):
-            gen_library = ps.GeneralizedLibrary(
-            [weak_u_library, weak_u_dot_library, weak_u_and_u_dot_library, weak_t_library], 
+        # Build one combined base library first so all terms share the same weak integration domains.
+        gen_library = ps.GeneralizedLibrary(
+            [u_only_library, u_dot_only_library, u_and_u_dot_library, t_library],
             inputs_per_library=inputs_per_library
+        )
+
+        # For weak SINDy, use one explicit CustomLibrary over (u, u_dot, t) and wrap
+        # it once. This keeps a single weak integration mesh and avoids a known
+        # axis-mapping issue from nesting WeakPDELibrary around GeneralizedLibrary.
+        if (is_weak):
+            weak_functions = [
+                lambda u, u_dot, t: u,
+                lambda u, u_dot, t: u**2,
+                lambda u, u_dot, t: u**3,
+                lambda u, u_dot, t: u_dot,
+                lambda u, u_dot, t: u * u_dot,
+                lambda u, u_dot, t: u**2 * u_dot,
+                lambda u, u_dot, t: 1.0,
+                lambda u, u_dot, t: self.non_aut_term_fit(t)
+            ]
+            weak_names = [
+                lambda u, u_dot, t: 'u',
+                lambda u, u_dot, t: 'u^2',
+                lambda u, u_dot, t: 'u^3',
+                lambda u, u_dot, t: 'u_dot',
+                lambda u, u_dot, t: 'u*u_dot',
+                lambda u, u_dot, t: 'u^2*u_dot',
+                lambda u, u_dot, t: '1',
+                lambda u, u_dot, t: 'f_td(' + t + ')'
+            ]
+            weak_base_library = ps.CustomLibrary(
+                library_functions=weak_functions,
+                function_names=weak_names
+            )
+            feature_library = ps.WeakPDELibrary(
+                function_library=weak_base_library,
+                spatiotemporal_grid=t,
+                K=100 # TODO Much larger K is apparently standard for weak formulation; try up to 1e5
             )
         else:
-            gen_library = ps.GeneralizedLibrary(
-                [u_only_library, u_dot_only_library, u_and_u_dot_library, t_library], 
-                inputs_per_library=inputs_per_library
-            )
+            feature_library = gen_library
 
 
         # TODO Test other optimizers like LASSO and STLSQ and comparing them to SSR
@@ -537,13 +535,19 @@ class GenLibraryFit():
         #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
         optimizer = ps.SSR(alpha=1e-5, normalize_columns=True) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
         model_latent = ps.SINDy(
-            feature_library=gen_library, 
+            feature_library=feature_library, 
             optimizer=optimizer,
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 5}) # Window length should be an odd number (results may be unexpected if even)
         )
         print('Differentiation method parameters: ', model_latent.differentiation_method.get_params())
 
-        model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
+        # WeakPDELibrary already uses spatiotemporal_grid for integration. In weak
+        # mode, pass scalar dt to satisfy SINDy.fit API while avoiding axis-map
+        # conflicts triggered by passing a full time vector.
+        if (is_weak):
+            model_latent.fit(X_with_time, t=self.dt, feature_names=["u", "u_dot", "t"])
+        else:
+            model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
 
         # Debugging — Print number of features for each library and shape of the input data
         # print(f"Number of features in u_only library: {u_only_library.n_output_features_}")
@@ -555,8 +559,5 @@ class GenLibraryFit():
 
         # Create bar chart comparison between SINDy and exact coefficients.
         compare_exact_and_sindy_coeffs(model_latent, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
-
-        print("Identified Latent Model (u, u_dot):")
-        model_latent.print()
         
         return model_latent

@@ -229,8 +229,8 @@ class GenLibraryFit():
         for i in range(model_reconstruction.shape[1] - 1):
             ax[i].plot(self.states_fhn_td[:, 2], self.states_fhn_td[:, i], label='Exact Solution', color=self.color)
             ax[i].plot(t, model_reconstruction[:,i], label='SINDy Reconstruction', color='black', linestyle='--')
-            ax[i].set_xlim(0, t[-1]) # 400
-            ax[i].set_ylim(-0.1, 1.1) # Set constant limits so we can compare across different plots
+            ax[i].set_xlim(0, 400) # t[-1]
+            # ax[i].set_ylim(-0.1, 1.1) # Set constant limits so we can compare across different plots
             ax[i].set_xlabel('t')
             ax[i].set_ylabel(['u', 'v'][i])
             ax[i].set_title([f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})', f'Recovery Variable vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})'][i])

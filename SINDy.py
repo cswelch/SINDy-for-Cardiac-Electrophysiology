@@ -5,7 +5,7 @@ from math import factorial
 
 class SINDy():
     """SINDy class to determine active terms in function space of a 
-    given dataset of a dynamic system.
+    given dataset of a dynamical system.
     """
     
     def __init__(self, lambda_=0.025, n=10, poly_power=3, feature_names='xyz'):

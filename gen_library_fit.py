@@ -2,8 +2,9 @@ import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
 from ddeint import ddeint
-from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs
+from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs, get_fhn_exact_coeffs
 import matplotlib.pyplot as plt
+from sklearn import metrics
 
 class GenLibraryFit():
     '''
@@ -215,11 +216,16 @@ class GenLibraryFit():
             model (pysindy.SINDy): A fitted SINDy model.
             t (1d array): Time range for simulation.
             x_0 (1d array): Initial conditions for simulation.
+            u (1d array): The voltage values of the fhn states array, which itself contains u, v, and t columns in that order.
+            precision (int):    Exponent with base 10 representing to what precision to display MSE.
     '''
-    def reconstruct_and_plot(self, model, t, x_0):
+    def reconstruct_and_plot(self, model, t, x_0, u, precision: int = 5):
+        # TODO Using MAE would reduce problems with peak shift sensitivity (but would be harder to compare to coefficient MSE)
         # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
         x_0 = np.concatenate((x_0, np.array([t[0]])))
         model_reconstruction = model.simulate(x_0, t, integrator='odeint')
+        mse_reconstruction = metrics.mean_squared_error(model_reconstruction[:, 0], u) # Compute the mean squared error between the model voltage and true voltage values.
+        print(f"\n\nMean Squared Error between reconstruction and true values: {mse_reconstruction:.{precision}e}")
 
         fig, ax = plt.subplots(2, 1, figsize=(8, 8)) # For presentations and papers, use:  figsize=(8, 8), dpi=200
         plt.tight_layout()
@@ -295,11 +301,11 @@ class GenLibraryFit():
         model_fhn_td = ps.SINDy(feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=["u", "v", "t"])
 
-        # Create bar chart comparison between SINDy and exact coefficients.
+        # Create bar chart comparison between SINDy and exact coefficients
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
 
-        # Reconstruct the solution from the SINDy fit and plot it against the data.        
-        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td)
+        # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MSE on the plot
+        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0])
 
         return model_fhn_td
 

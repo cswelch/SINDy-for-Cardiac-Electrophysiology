@@ -112,8 +112,8 @@ def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_
     tol = 10**(-precision)
     print(f"Number of SINDy terms for u\', v\': ({np.sum(np.abs(coef_sindy[0]) > tol)}, {np.sum(np.abs(coef_sindy[1]) > tol)})")
     print(f"Number of exact terms for u\', v\': ({np.sum(np.abs(coef_exact[0]) > tol)}, {np.sum(np.abs(coef_exact[1]) > tol)})")
-    mse_coef = metrics.mean_squared_error(coef_exact, coef_sindy[0:2])
-    print(f"Mean Squared Error of coefficients: {mse_coef:.{precision}e}")
+    mae_coef = metrics.mean_absolute_error(coef_exact, coef_sindy[0:2])
+    print(f"Mean Absolute Error of coefficients: {mae_coef:.{precision}e}")
 
     # Compare the SINDy and exact coefficients.
     print("\nSINDy coefficients:")

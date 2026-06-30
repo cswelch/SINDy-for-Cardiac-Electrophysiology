@@ -217,15 +217,14 @@ class GenLibraryFit():
             t (1d array): Time range for simulation.
             x_0 (1d array): Initial conditions for simulation.
             u (1d array): The voltage values of the fhn states array, which itself contains u, v, and t columns in that order.
-            precision (int):    Exponent with base 10 representing to what precision to display MSE.
+            precision (int):    Exponent with base 10 representing to what precision to display MAE.
     '''
     def reconstruct_and_plot(self, model, t, x_0, u, precision: int = 5):
-        # TODO Using MAE would reduce problems with peak shift sensitivity (but would be harder to compare to coefficient MSE)
         # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
         x_0 = np.concatenate((x_0, np.array([t[0]])))
         model_reconstruction = model.simulate(x_0, t, integrator='odeint')
-        mse_reconstruction = metrics.mean_squared_error(model_reconstruction[:, 0], u) # Compute the mean squared error between the model voltage and true voltage values.
-        print(f"\n\nMean Squared Error between reconstruction and true values: {mse_reconstruction:.{precision}e}")
+        mae_reconstruction = metrics.mean_absolute_error(model_reconstruction[:, 0], u) # Compute the mean absolute error between the model voltage and true voltage values.
+        print(f"\n\nMean Absolute Error between reconstruction and true values: {mae_reconstruction:.{precision}e}")
 
         fig, ax = plt.subplots(2, 1, figsize=(8, 8)) # For presentations and papers, use:  figsize=(8, 8), dpi=200
         plt.tight_layout()
@@ -304,7 +303,7 @@ class GenLibraryFit():
         # Create bar chart comparison between SINDy and exact coefficients
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
 
-        # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MSE on the plot
+        # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
         self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0])
 
         return model_fhn_td
@@ -535,7 +534,7 @@ class GenLibraryFit():
         #     cur_model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
 
         #     # Save only if it beats all other fits
-        #     if (cur_mse > last_mse):
+        #     if (cur_mae > last_mae):
 
         # Fit SINDy model.
         #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 

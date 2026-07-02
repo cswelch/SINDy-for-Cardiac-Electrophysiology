@@ -370,8 +370,8 @@ class GenLibraryFit():
             feature_library=gen_library,
             optimizer=ps.SSR(alpha=1e-5, normalize_columns=True),
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(
-            smoother_kws={"window_length": 11, "polyorder": 3}
-        )
+                smoother_kws={"window_length": 11, "polyorder": 3}
+            )
         )
         
         model.fit(X_embedded, t=t[total_delay:total_delay + n_samples], feature_names=feature_names)
@@ -421,8 +421,8 @@ class GenLibraryFit():
         ax.set_xlim(0, 400)
         ax.set_xlabel("t")
         ax.set_ylabel("u")
-        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})")
-        ax.legend()
+        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Polynomial Degree {self.takens_degree}, Embedding Dimension {self.takens_n_embed})")
+        ax.legend(loc='upper right')
         ax.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()

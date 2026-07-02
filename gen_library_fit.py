@@ -8,17 +8,17 @@ from sklearn import metrics
 
 class GenLibraryFit():
     '''
-    Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
-    non-autonomous term function.
-    Params:
-        non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
-        non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-        fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
-        t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
-        ics (1d array): Initial conditions for the FHN equations.
-        color (string): Color to use for the original data in the reconstruction plots.
-        u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
-        v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
+        Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
+        non-autonomous term function.
+        Params:
+            non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
+            non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
+            fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
+            t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
+            ics (1d array): Initial conditions for the FHN equations.
+            color (string): Color to use for the original data in the reconstruction plots.
+            u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
+            v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
     '''
     def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", 
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", 
@@ -137,12 +137,12 @@ class GenLibraryFit():
 
 
     '''
-    FitzHugh-Nagumo equations modified with an additional equation for time.
-    Params:
-        state (2d array):        Contains the state variables u and v
-        t (1d array):            Time input
-        non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
-        alpha, beta, gamma, delta, eps, [theta, mu] (float): Parameters for the FHN equations.
+        FitzHugh-Nagumo equations modified with an additional equation for time.
+        Params:
+            state (2d array):        Contains the state variables u and v
+            t (1d array):            Time input
+            non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
+            alpha, beta, gamma, delta, eps, [theta, mu] (float): Parameters for the FHN equations.
     '''
     # Define standard FHN w/ non_aut_term_data term
     def fhn_td(self, state, t):
@@ -286,8 +286,8 @@ class GenLibraryFit():
         array with differing numbers of entries in each row. E.g., [[0,0,0], [1,1,2], [0,1,2]] would mean that the first
         library is applied to the first feature (u), the second library is applied to the second and third features (v,t),
         and the third library is applied to all three features (u,v,t). In our case, we have the following correspondence:
-            u_v_library: Contains only functions of features 0 and 1 (u,v)
-            t_library: Contains only functions of feature 2 (t)
+            u_v_library: Contains only functions of features 0 and 1 (u,v).
+            t_library: Contains only functions of feature 2 (t).
         At the moment, we don't specify in which equations (e.g., u_dot, v_dot) each variable can be used.
         '''
         inputs_per_library = [
@@ -310,11 +310,15 @@ class GenLibraryFit():
 
 
     '''
-    Fit SINDy using Takens time-delay embedding with 5 dimensions.
-    Reconstructs the 2D phase space from a single measured variable u.
+        Fit SINDy using Takens time-delay embedding with the specified number of dimensions.
+        Reconstructs the 2D phase space from a single measured variable u.
+        Params:
+            poly_degree (int): Degree of polynomial library to use for u terms in the embedding.
+            n_embed (int): Number of dimensions to use in Takens embedding (i.e., number of time delays).
+        Returns:
+            model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
     '''
-    # TODO Figure out how to compare output with single-shift ID results.
-    def fit_takens(self):
+    def fit_takens(self, poly_degree=3, n_embed=5):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -323,8 +327,7 @@ class GenLibraryFit():
         delay_idx = int(np.round(self.tau / self.dt))
         delay_idx = max(1, min(delay_idx, len(u) // 6))  # Sanity check
         
-        # Define our 5-dimensional embedding by [u(t), u(t-τ), u(t-2τ), u(t-3τ), u(t-4τ)].
-        n_embed = 5
+        # Define our n-dimensional embedding by [u(t), u(t-τ), u(t-2τ), ...u(t-(n-1)τ)].
         total_delay = (n_embed - 1) * delay_idx
         
         # Initialize embedded state matrix.
@@ -339,8 +342,8 @@ class GenLibraryFit():
         
         feature_names = [f"u(t-{i*delay_idx})" for i in range(n_embed)] + ["t"]
         
-        # --- Build polynomial library for 5D embedding with up to degree 3 for u terms. ---
-        embed_library = ps.PolynomialLibrary(degree=3)
+        # --- Build polynomial library for 5D embedding with up to degree 2 for u terms. ---
+        embed_library = ps.PolynomialLibrary(degree=poly_degree, include_bias=False)
         
         # --- Build library of time-dependent terms. ---
         t_functions = [
@@ -366,7 +369,9 @@ class GenLibraryFit():
         model = ps.SINDy(
             feature_library=gen_library,
             optimizer=ps.SSR(alpha=1e-5, normalize_columns=True),
-            differentiation_method=ps.differentiation.SmoothedFiniteDifference()
+            differentiation_method=ps.differentiation.SmoothedFiniteDifference(
+            smoother_kws={"window_length": 11, "polyorder": 3}
+        )
         )
         
         model.fit(X_embedded, t=t[total_delay:total_delay + n_samples], feature_names=feature_names)

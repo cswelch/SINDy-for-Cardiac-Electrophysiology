@@ -318,7 +318,7 @@ class GenLibraryFit():
         Returns:
             model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
     '''
-    def fit_takens(self, poly_degree=3, n_embed=5):
+    def fit_takens(self, poly_degree=2, n_embed=7):     
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -380,9 +380,53 @@ class GenLibraryFit():
         print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
         print(f"Embedding dimension = {n_embed}")
         model.print()
+
+        # Save model and embedding parameters for use in reconstruction and plotting.
+        self.takens_model = model
+        self.takens_degree = poly_degree
+        self.takens_n_embed = n_embed
+        self.takens_delay_idx = delay_idx
+        self.takens_total_delay = total_delay
+        self.takens_X_embedded = X_embedded
+        self.takens_t = t[total_delay:total_delay + n_samples]
         
-        return model
-    
+        return model    
+
+
+    ''''
+        Using the results from fit_takens, simulate the embedding forward, then compare the result to the original
+        data.
+        Params:
+            model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding. If None, uses self.takens_model.
+            precision (int): The number of decimal places to display in the output.
+    '''
+    def reconstruct_and_plot_takens(self, model=None, precision=5):
+        if model is None:
+            model = self.takens_model
+
+        Xembedded = self.takens_X_embedded
+        t_emb = self.takens_t
+
+        Xsim = model.simulate(Xembedded[0], t_emb, integrator="odeint")
+
+        u_true = Xembedded[:, 0]
+        u_sindy = Xsim[:, 0]
+
+        mae_u = metrics.mean_absolute_error(u_true, u_sindy)
+        print(f"Takens reconstruction MAE (u): {mae_u:.{precision}e}")
+
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=200)
+        ax.plot(t_emb, u_true, color=self.color, lw=1.5, label="Exact Solution")
+        ax.plot(t_emb, u_sindy, "k--", lw=1.5, label="SINDy Reconstruction")
+        ax.set_xlim(0, 400)
+        ax.set_xlabel("t")
+        ax.set_ylabel("u")
+        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})")
+        ax.legend()
+        ax.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
 
     '''
         Fit SINDy using only the u variable by embedding into (u, u_dot) space.

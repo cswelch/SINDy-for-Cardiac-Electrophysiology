@@ -54,11 +54,9 @@ class GenLibraryFit():
             self.fhn_name = "VF7"
             self.fhn_variant = self.fhn_vf_7_td
         elif fhn_variant == "standard_delayed_copy":
-            self.tau = 24 # Set the delay time for the delayed copy variant
             self.fhn_name = "standard_delayed_copy"
             self.fhn_variant = self.fhn_delayed_copy
         elif fhn_variant == "fhn_auto_osc_delayed_copy":
-            self.tau = 24 # Set the delay time for the delayed copy variant
             self.fhn_name = "fhn_auto_osc_delayed_copy"
             self.fhn_variant = self.fhn_auto_osc_delayed_copy
         elif fhn_variant == "fhn_lode": # The L-ODE variant used in fit_latent_ode() generates with the same FHN data but needs a different name

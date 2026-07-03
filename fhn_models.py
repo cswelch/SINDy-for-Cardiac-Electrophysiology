@@ -194,8 +194,6 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
             params = dict(alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0)
         elif fhn_name == "VF7":
             params = dict(alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0)
-        elif fhn_name == "standard_delayed_copy":
-            pass    # No parameters needed for this variant — defined in gen_library_fit.
         elif fhn_name == "fhn_lode":
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         else:
@@ -215,10 +213,6 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
     elif fhn_name == "VF7":
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*((params['beta']-u)*(u-params['gamma']) - params['delta']*v - params['theta'])
-    elif fhn_name == "standard_delayed_copy":
-        # This variant includes a delayed copy of u in the u' equation. The delay is handled in gen_library_fit.
-        u_rhs = u*(1-u)*(u-0.1) - v + f_td  # Using standard FHN parameters.
-        v_rhs = u*(1-u)*(u-0.1) - v + f_td  # Duplicate of u' equation (missing time delay)
     elif fhn_name == "fhn_lode":
         # L-ODE formulation: eliminates v from standard FHN to get a 2nd-order ODE for u.
         # Returns coefficients for (u_dot, u_dot_dot) instead of (u_dot, v_dot).

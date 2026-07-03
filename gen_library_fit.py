@@ -67,7 +67,7 @@ class GenLibraryFit():
         def initial_history(t):
             return self.x_0_fhn_td
 
-        # Generate u, v, and t data. Concatenate the t terms instead of directly solving for them since they are trivial.
+        # Integrate to get u, v, and t data.
         if fhn_variant == "standard_delayed_copy":
             # Wraps additional arguments sent to delayed function
             fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
@@ -79,7 +79,7 @@ class GenLibraryFit():
             self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
         else:
             # For non-delayed variants (i.e., "standard" + "cardiac" + "VF4" + "VF7"), use odeint
-            self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1) # Test --> lambda t: 0       Actual --> logical_non_aut
+            self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1)
             
 
         # int_u = np.trapz(y=self.states_fhn_td[:, 0], dx=0.01)
@@ -93,9 +93,10 @@ class GenLibraryFit():
         if v_noise > 0.0:
             self.states_fhn_td[:, 1] += np.random.normal(0, v_noise, self.states_fhn_td[:, 1].shape) # Add noise to v
         
-        # plt.plot(t_fhn_td, states_fhn_td[:, 0], label='u')
+        # Concatenate the t terms for later use instead of directly solving for them since they are trivial.
         self.states_fhn_td = np.concatenate((self.states_fhn_td, self.t_fhn_td.reshape(-1, 1)), axis=1)
-
+        
+        # plt.plot(t_fhn_td, states_fhn_td[:, 0], label='u')
         # print(t_fhn_td.shape)
         # print(states_fhn_td.shape)
         # print(states_fhn_td[0:10,:])
@@ -311,12 +312,12 @@ class GenLibraryFit():
         Fit SINDy using Takens time-delay embedding with the specified number of dimensions.
         Reconstructs the 2D phase space from a single measured variable u.
         Params:
-            poly_degree (int): Degree of polynomial library to use for u terms in the embedding.
+            embed_degree (int): Degree of polynomial library to use for u terms in the embedding.
             n_embed (int): Number of dimensions to use in Takens embedding (i.e., number of time delays).
         Returns:
             model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
     '''
-    def fit_takens(self, poly_degree=2, n_embed=7):     
+    def fit_takens(self, embed_degree=3, n_embed=7):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -340,8 +341,8 @@ class GenLibraryFit():
         
         feature_names = [f"u(t-{i*delay_idx})" for i in range(n_embed)] + ["t"]
         
-        # --- Build polynomial library for 5D embedding with up to degree 2 for u terms. ---
-        embed_library = ps.PolynomialLibrary(degree=poly_degree, include_bias=False)
+        # --- Build polynomial library for embedding with up to degree embed_degree for u terms. ---
+        embed_library = ps.PolynomialLibrary(degree=embed_degree, include_bias=False)
         
         # --- Build library of time-dependent terms. ---
         t_functions = [
@@ -354,9 +355,11 @@ class GenLibraryFit():
         )
         
         # Combine libraries with GeneralizedLibrary.
+        u_lib_idx = list(range(n_embed))
+        t_lib_idx = n_embed * [n_embed]
         inputs_per_library = [
-            [0, 1, 2, 3, 4], # Apply embedding library to first 5 features (u dimensions)
-            [5, 5, 5, 5, 5]  # Apply time library to last feature (t)
+            u_lib_idx, # Apply embedding library to first n_embed features (u dimensions)
+            t_lib_idx  # Apply time library to last feature (t)
         ]
         gen_library = ps.GeneralizedLibrary(
             [embed_library, t_library],
@@ -374,14 +377,14 @@ class GenLibraryFit():
         
         model.fit(X_embedded, t=t[total_delay:total_delay + n_samples], feature_names=feature_names)
         
-        print("\n--- SINDy with Takens Embedding (5 dimensions) ---")
+        print("\n---------- SINDy with Takens Embedding ----------")
         print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
         print(f"Embedding dimension = {n_embed}")
         model.print()
 
         # Save model and embedding parameters for use in reconstruction and plotting.
         self.takens_model = model
-        self.takens_degree = poly_degree
+        self.embed_degree = embed_degree
         self.takens_n_embed = n_embed
         self.takens_delay_idx = delay_idx
         self.takens_total_delay = total_delay
@@ -419,7 +422,7 @@ class GenLibraryFit():
         ax.set_xlim(0, 400)
         ax.set_xlabel("t")
         ax.set_ylabel("u")
-        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Polynomial Degree {self.takens_degree}, Embedding Dimension {self.takens_n_embed})")
+        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Embedding Degree {self.embed_degree}, Embedding Dimension {self.takens_n_embed})")
         ax.legend(loc='upper right')
         ax.grid(alpha=0.3)
         plt.tight_layout()

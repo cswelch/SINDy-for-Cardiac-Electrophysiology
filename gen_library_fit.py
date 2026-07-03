@@ -296,7 +296,11 @@ class GenLibraryFit():
         gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
         # Do the SINDy fit
-        model_fhn_td = ps.SINDy(feature_library=gen_library, optimizer=ps.SSR(alpha=1e-5, normalize_columns=True)) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
+        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True)
+        model_fhn_td = ps.SINDy(
+            feature_library=gen_library, 
+            optimizer=optimizer
+        )
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=["u", "v", "t"])
 
         # Create bar chart comparison between SINDy and exact coefficients
@@ -367,9 +371,10 @@ class GenLibraryFit():
         )
         
         # Fit SINDy model.
+        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True)
         model = ps.SINDy(
             feature_library=gen_library,
-            optimizer=ps.SSR(alpha=1e-5, normalize_columns=True),
+            optimizer=optimizer,
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(
                 smoother_kws={"window_length": 11, "polyorder": 3}
             )
@@ -573,7 +578,7 @@ class GenLibraryFit():
         # lambdas = np.arange(0.01,0.11,0.01)
         # for lam in lambdas:
 
-        #     optimizer = ps.SSR(alpha=1e-5, normalize_columns=True)
+        #     optimizer = ps.SSR(alpha=1e-5, normalize_columns=False)
         #     cur_model_latent = ps.SINDy(
         #         feature_library=gen_library, 
         #         optimizer=optimizer,
@@ -589,7 +594,7 @@ class GenLibraryFit():
         # Fit SINDy model.
         #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 
         #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
-        optimizer = ps.SSR(alpha=1e-5, normalize_columns=True) # ps.STLSQ(threshold=0.01, alpha=1e-5, normalize_columns=True)
+        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True)
         model_latent = ps.SINDy(
             feature_library=feature_library, 
             optimizer=optimizer,

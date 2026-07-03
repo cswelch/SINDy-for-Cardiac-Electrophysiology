@@ -316,12 +316,12 @@ class GenLibraryFit():
         Fit SINDy using Takens time-delay embedding with the specified number of dimensions.
         Reconstructs the 2D phase space from a single measured variable u.
         Params:
-            embed_degree (int): Degree of polynomial library to use for u terms in the embedding.
+            is_cubic (boolean): If True, includes cubic terms in the library; if False, only includes linear and quadratic terms.
             n_embed (int): Number of dimensions to use in Takens embedding (i.e., number of time delays).
         Returns:
             model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
     '''
-    def fit_takens(self, embed_degree=3, n_embed=7):
+    def fit_takens(self, is_cubic=True, n_embed=7):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -345,58 +345,100 @@ class GenLibraryFit():
         
         feature_names = [f"u(t-{i*delay_idx})" for i in range(n_embed)] + ["t"]
         
-        # --- Build polynomial library for embedding with up to degree embed_degree for u terms. ---
-        embed_library = ps.PolynomialLibrary(degree=embed_degree, include_bias=False)
         
-        # --- Build library of time-dependent terms. ---
-        t_functions = [
-            lambda t: 1.0,
-            self.non_aut_term_fit
-        ]
+        # ------------------------------- Build libraries ------------------------------------
+        linear_library = ps.CustomLibrary(
+            library_functions=[lambda x: x],
+            function_names=[lambda x: x]
+        )
+
+        quad_library = ps.CustomLibrary(
+            library_functions=[lambda x: x**2],
+            function_names=[lambda x: x + "^2"]
+        )
+
+        cubic_library = ps.CustomLibrary(
+            library_functions=[lambda x: x**3],
+            function_names=[lambda x: x + "^3"]
+        )
+
+        pair_library = ps.CustomLibrary(
+            library_functions=[lambda x, y: x * y],
+            function_names=[lambda x, y: x + "*" + y]
+        )
+
+        t_functions = [lambda t: 1.0, self.non_aut_term_fit]
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
-            function_names=[lambda t: '1', lambda t: 'f_td(' + t + ')']
+            function_names=[lambda t: "1", lambda t: "f_td(" + t + ")"]
         )
-        
-        # Combine libraries with GeneralizedLibrary.
-        u_lib_idx = list(range(n_embed))
-        t_lib_idx = n_embed * [n_embed]
-        inputs_per_library = [
-            u_lib_idx, # Apply embedding library to first n_embed features (u dimensions)
-            t_lib_idx  # Apply time library to last feature (t)
-        ]
+
+        libraries = []
+        inputs_per_library = []
+
+        # Add polynomial powers of u variables.
+        for i in range(n_embed):
+            if (is_cubic):
+                libraries.extend([linear_library, quad_library, cubic_library])
+                inputs_per_library.extend([[i], [i], [i]])
+            else:
+                libraries.extend([linear_library, quad_library])
+                inputs_per_library.extend([[i], [i]])
+
+        # TODO Definitively compare these two cross-term sets across whole time domain (not just first 400 time units).
+        # Add products of adjacent u variables, where each is linear (e.g., u(t) * u(t-τ), u(t-τ) * u(t-2τ), etc.).
+        # for i in range(n_embed - 1):
+        #     libraries.append(pair_library)
+        #     inputs_per_library.append([i, i + 1])
+
+        # Add products of all pairs between the first observable u variable and the remaining u delays (e.g., u(t) *
+        # u(t-2τ), u(t) * u(t-3τ), etc.).  This is useful because u(t) is often the most informative variable for the dynamics.
+        for i in range(1, n_embed):
+            libraries.append(pair_library)
+            inputs_per_library.append([0, i])
+
+        # Add time library
+        libraries.append(t_library)
+        inputs_per_library.append([n_embed])
+
         gen_library = ps.GeneralizedLibrary(
-            [embed_library, t_library],
+            libraries,
             inputs_per_library=inputs_per_library
         )
-        
-        # Fit SINDy model.
-        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True)
+        # ------------------------------------------------------------------------------------
+
+
         model = ps.SINDy(
             feature_library=gen_library,
-            optimizer=optimizer,
+            optimizer=ps.STLSQ(threshold=0.1, normalize_columns=True),
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(
                 smoother_kws={"window_length": 11, "polyorder": 3}
             )
         )
         
-        model.fit(X_embedded, t=t[total_delay:total_delay + n_samples], feature_names=feature_names)
+        model.fit(
+            X_embedded, 
+            t=t[total_delay:total_delay + n_samples], 
+            feature_names=feature_names
+        )
         
         print("\n---------- SINDy with Takens Embedding ----------")
         print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
         print(f"Embedding dimension = {n_embed}")
         model.print()
+        print(gen_library.get_feature_names())
+        print('inputs_per_libary: ', inputs_per_library)
 
         # Save model and embedding parameters for use in reconstruction and plotting.
         self.takens_model = model
-        self.embed_degree = embed_degree
+        self.is_cubic = is_cubic
         self.takens_n_embed = n_embed
         self.takens_delay_idx = delay_idx
         self.takens_total_delay = total_delay
         self.takens_X_embedded = X_embedded
         self.takens_t = t[total_delay:total_delay + n_samples]
         
-        return model    
+        return model
 
 
     ''''
@@ -427,7 +469,7 @@ class GenLibraryFit():
         ax.set_xlim(0, 400)
         ax.set_xlabel("t")
         ax.set_ylabel("u")
-        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Embedding Degree {self.embed_degree}, Embedding Dimension {self.takens_n_embed})")
+        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Include Cubic Terms = {self.is_cubic}, Embedding Dimension {self.takens_n_embed})")
         ax.legend(loc='upper right')
         ax.grid(alpha=0.3)
         plt.tight_layout()

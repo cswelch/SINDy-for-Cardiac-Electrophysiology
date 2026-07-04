@@ -636,7 +636,7 @@ class GenLibraryFit():
         # Fit SINDy model.
         #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 
         #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
-        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True)
+        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True) # ps.SSR(alpha=2e-1, normalize_columns=True)
         model_latent = ps.SINDy(
             feature_library=feature_library, 
             optimizer=optimizer,
@@ -662,5 +662,8 @@ class GenLibraryFit():
 
         # Create bar chart comparison between SINDy and exact coefficients.
         compare_exact_and_sindy_coeffs(model_latent, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
+        
+        # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
+        self.reconstruct_and_plot(model_latent, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0])
         
         return model_latent

@@ -216,9 +216,10 @@ class GenLibraryFit():
             t (1d array): Time range for simulation.
             x_0 (1d array): Initial conditions for simulation.
             u (1d array): The voltage values of the fhn states array, which itself contains u, v, and t columns in that order.
-            precision (int):    Exponent with base 10 representing to what precision to display MAE.
+            end_time (int): The end time for the simulation and plots (start time is always 0).
+            precision (int): Exponent with base 10 representing to what precision to display MAE.
     '''
-    def reconstruct_and_plot(self, model, t, x_0, u, precision: int = 5):
+    def reconstruct_and_plot(self, model, t, x_0, u, end_time, precision: int = 5):
         # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
         x_0 = np.concatenate((x_0, np.array([t[0]])))
         model_reconstruction = model.simulate(x_0, t, integrator='odeint')
@@ -232,13 +233,13 @@ class GenLibraryFit():
         # Plot for u and v variables
         for i in range(model_reconstruction.shape[1] - 1):
             ax[i].plot(self.states_fhn_td[:, 2], self.states_fhn_td[:, i], label='Exact Solution', color=self.color)
-            ax[i].plot(t, model_reconstruction[:,i], label='SINDy Reconstruction', color='black', linestyle='--')
-            ax[i].set_xlim(0, 400) # t[-1]
+            ax[i].plot(t, model_reconstruction[:, i], label='SINDy Reconstruction', color='black', linestyle='--')
+            ax[i].set_xlim(0, end_time) # t[-1]
             # ax[i].set_ylim(-0.1, 1.1) # Set constant limits so we can compare across different plots
             ax[i].set_xlabel('t')
             ax[i].set_ylabel(['u', 'v'][i])
             ax[i].set_title([f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})', f'Recovery Variable vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})'][i])
-            # ax[i].grid()
+            ax[i].grid(alpha=0.3)
             # if (i == 0):
             #     ax[i].set_ylim(-0.05, 0.9) # Set constanty limits for u plot to maintain comparability
             if (i == 1):
@@ -254,7 +255,7 @@ class GenLibraryFit():
     Returns:
         model_fhn_td (pysindy.SINDy): A fitted SINDy model with the specified non-autonomous term.
     '''
-    def fit(self):
+    def fit(self, end_time=400):
         # Define variable-specific functions; functions of u and v are included in the first library, while the non-autonomous term is included in the second library. 
         # Note that the non-autonomous term is only applied to the u_dot equation.
         u_v_functions = [
@@ -307,7 +308,7 @@ class GenLibraryFit():
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
 
         # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
-        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0])
+        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0], end_time=end_time)
 
         return model_fhn_td
 
@@ -446,9 +447,10 @@ class GenLibraryFit():
         data.
         Params:
             model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding. If None, uses self.takens_model.
+            end_time (int): The end time for the simulation and plots (start time is always 0).
             precision (int): The number of decimal places to display in the output.
     '''
-    def reconstruct_and_plot_takens(self, model=None, precision=5):
+    def reconstruct_and_plot_takens(self, model=None, end_time=400, precision=5):
         if model is None:
             model = self.takens_model
 
@@ -466,7 +468,7 @@ class GenLibraryFit():
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200)
         ax.plot(t_emb, u_true, color=self.color, lw=1.5, label="Exact Solution")
         ax.plot(t_emb, u_sindy, "k--", lw=1.5, label="SINDy Reconstruction")
-        ax.set_xlim(0, 400)
+        ax.set_xlim(0, end_time)
         ax.set_xlabel("t")
         ax.set_ylabel("u")
         ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Include Cubic Terms = {self.is_cubic}, Embedding Dimension {self.takens_n_embed})")
@@ -481,8 +483,9 @@ class GenLibraryFit():
         Mathematically, FHN can be written as a 2nd order ODE for u.
         Params:
             is_weak (bool): True specifies use of weak formulation for each of the 4 libraries; false uses normal CustomLibrary implementations.
-    '''
-    def fit_latent_ODE(self, is_weak=False):
+            end_time (int): The end time for the simulation and plots (start time is always 0).
+        '''
+    def fit_latent_ODE(self, is_weak=False, end_time=400):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u_obs = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -664,6 +667,6 @@ class GenLibraryFit():
         compare_exact_and_sindy_coeffs(model_latent, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
         
         # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
-        self.reconstruct_and_plot(model_latent, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0])
+        self.reconstruct_and_plot(model_latent, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0], end_time=end_time)
         
         return model_latent

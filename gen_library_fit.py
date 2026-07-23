@@ -392,24 +392,24 @@ class GenLibraryFit():
 
         # TODO Definitively compare these two cross-term sets across whole time domain (not just first 400 time units).
         # Add products of adjacent u variables, where each is linear (e.g., u(t) * u(t-τ), u(t-τ) * u(t-2τ), etc.).
-        for i in range(n_embed - 1):
-            libraries.append(pair_library)
-            inputs_per_library.append([i, i + 1])
+        # for i in range(n_embed - 1):
+        #     libraries.append(pair_library)
+        #     inputs_per_library.append([i, i + 1])
 
-            if i == 0:
-                added_0_1_cross_term = True
+        #     if i == 0:
+        #         added_0_1_cross_term = True
 
         # Add products of all pairs between the first observable u variable and the remaining u delays (e.g., u(t) *
         # u(t-2τ), u(t) * u(t-3τ), etc.).  This is useful because u(t) is often the most informative variable for the dynamics.
         # Currently, best results are in 4D with these cross terms but not the previous ones.
-        # for i in range(1, n_embed):
-        #     if not added_0_1_cross_term and i == 1:
-        #         libraries.append(pair_library)
-        #         inputs_per_library.append([0, 1])
-        #         added_0_1_cross_term = True
-        #     elif i > 1:
-        #         libraries.append(pair_library)
-        #         inputs_per_library.append([0, i])
+        for i in range(1, n_embed):
+            if not added_0_1_cross_term and i == 1:
+                libraries.append(pair_library)
+                inputs_per_library.append([0, 1])
+                added_0_1_cross_term = True
+            elif i > 1:
+                libraries.append(pair_library)
+                inputs_per_library.append([0, i])
 
         # Add time library
         libraries.append(t_library)

@@ -36,7 +36,7 @@ class GenLibraryFit():
         
         # Auto-compute optimal delay if not provided
         if tau is None:
-            self.tau = self._compute_delay(fhn_variant, ics, t_range[:500], 
+            self.tau = self._compute_delay(fhn_variant, ics, t_range[:10000],  # 500 TODO Make this parameter for user to specify how many pulses to use for delay estimation (not just fixed value).
                                         non_aut_term_data)
         else:
             self.tau = tau
@@ -107,14 +107,30 @@ class GenLibraryFit():
     '''
     def _compute_delay(self, fhn_variant, ics, t_short, non_aut_term):
         # Generate short trajectory for analysis.
-        if fhn_variant == "standard":
-            fhn_func = lambda Y, t: fhn(Y, t, non_aut_term)
-        else:
-            fhn_func = lambda Y, t: fhn(Y, t, non_aut_term) # TODO Add additional variants if needed.
+        variant_functions = {
+            "standard": fhn,
+            "cardiac": fhn_c,
+            "VF4": fhn_vf_4,
+            "VF7": fhn_vf_7,
+            "fhn_lode": fhn,
+        }
+
+        if fhn_variant not in variant_functions:
+            raise ValueError(f"Unknown FHN variant: {fhn_variant}")
+
+        fhn_func_base = variant_functions[fhn_variant]
+        fhn_func = lambda Y, t: fhn_func_base(Y, t, non_aut_term)
         
         u_short = odeint(fhn_func, ics, t_short)[:, 0]
+
+        # TODO Short trajectory plot for debugging; remove later.
+        plt.plot(t_short, u_short)
+        plt.xlabel('Time')
+        plt.ylabel('u')
+        plt.title('Short Trajectory')
+        plt.show()
         
-        # Compute mutual information at different lags.
+        # Compute Average Mutual Information (AMI) at different lags.
         max_lag = len(u_short) // 10
         ami = np.zeros(max_lag)
         

@@ -454,7 +454,7 @@ class GenLibraryFit():
         )
 
         if printing:
-            print("\n---------- SINDy with Takens Embedding ----------")
+            print("\n----------- SINDy with Takens Embedding -----------")
             print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
             print(f"Embedding dimension = {n_embed}")
             model.print()
@@ -508,7 +508,7 @@ class GenLibraryFit():
             ax.set_xlim(0, end_time)
             ax.set_xlabel("t")
             ax.set_ylabel("u")
-            ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau}, Embedding Dimension {self.takens_n_embed})")
+            ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.{precision}e}, Embedding Dimension {self.takens_n_embed})")
             ax.legend(loc='upper right')
             ax.grid(alpha=0.3)
             plt.tight_layout()

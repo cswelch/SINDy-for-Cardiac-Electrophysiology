@@ -476,10 +476,14 @@ class GenLibraryFit():
         data.
         Params:
             model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding. If None, uses self.takens_model.
+            plotting (bool): If True, plots the original data and the SINDy reconstruction; if False, only computes the mean absolute error.
+            printing (bool): If True, prints the mean absolute error; if False, does not print it.
             end_time (int): The end time for the simulation and plots (start time is always 0).
             precision (int): The number of decimal places to display in the output.
+        Returns:
+            mae_u (float): The mean absolute error between the true u values and the SINDy reconstruction.
     '''
-    def reconstruct_and_plot_takens(self, model=None, end_time=400, precision=5):
+    def reconstruct_and_plot_takens(self, model=None, plotting=True, printing=True, end_time=400, precision=5):
         if model is None:
             model = self.takens_model
 
@@ -492,19 +496,23 @@ class GenLibraryFit():
         u_sindy = Xsim[:, 0]
 
         mae_u = metrics.mean_absolute_error(u_true, u_sindy)
-        print(f"Takens reconstruction MAE (u): {mae_u:.{precision}e}")
+        if printing:
+            print(f"Takens reconstruction MAE (u): {mae_u:.{precision}e}")
 
-        fig, ax = plt.subplots(figsize=(8, 4), dpi=200)
-        ax.plot(t_emb, u_true, color=self.color, lw=1.5, label="Exact Solution")
-        ax.plot(t_emb, u_sindy, "k--", lw=1.5, label="SINDy Reconstruction")
-        ax.set_xlim(0, end_time)
-        ax.set_xlabel("t")
-        ax.set_ylabel("u")
-        ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Include Cubic Terms = {self.is_cubic}, Embedding Dimension {self.takens_n_embed})")
-        ax.legend(loc='upper right')
-        ax.grid(alpha=0.3)
-        plt.tight_layout()
-        plt.show()
+        if plotting:
+            fig, ax = plt.subplots(figsize=(8, 4), dpi=200)
+            ax.plot(t_emb, u_true, color=self.color, lw=1.5, label="Exact Solution")
+            ax.plot(t_emb, u_sindy, "k--", lw=1.5, label="SINDy Reconstruction")
+            ax.set_xlim(0, end_time)
+            ax.set_xlabel("t")
+            ax.set_ylabel("u")
+            ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau}, Embedding Dimension {self.takens_n_embed})")
+            ax.legend(loc='upper right')
+            ax.grid(alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
+        return mae_u
 
 
     '''

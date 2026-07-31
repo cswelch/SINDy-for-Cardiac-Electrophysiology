@@ -334,11 +334,12 @@ class GenLibraryFit():
         Reconstructs the 2D phase space from a single measured variable u.
         Params:
             is_cubic (boolean): If True, includes cubic terms in the library; if False, only includes linear and quadratic terms.
+            printing (boolean): If True, prints the fit and library details.
             n_embed (int): Number of dimensions to use in Takens embedding (i.e., number of time delays).
         Returns:
             model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
     '''
-    def fit_takens(self, is_cubic=True, n_embed=7):
+    def fit_takens(self, printing=True, is_cubic=True, n_embed=7):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -451,13 +452,14 @@ class GenLibraryFit():
             t=t[total_delay:total_delay + n_samples], 
             feature_names=feature_names
         )
-        
-        print("\n---------- SINDy with Takens Embedding ----------")
-        print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
-        print(f"Embedding dimension = {n_embed}")
-        model.print()
-        print(gen_library.get_feature_names())
-        print('inputs_per_libary: ', inputs_per_library)
+
+        if printing:
+            print("\n---------- SINDy with Takens Embedding ----------")
+            print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
+            print(f"Embedding dimension = {n_embed}")
+            model.print()
+            print(gen_library.get_feature_names())
+            print('inputs_per_libary: ', inputs_per_library)
 
         # Save model and embedding parameters for use in reconstruction and plotting.
         self.takens_model = model

@@ -508,7 +508,7 @@ class GenLibraryFit():
             ax.set_xlim(0, end_time)
             ax.set_xlabel("t")
             ax.set_ylabel("u")
-            ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.{precision}e}, Embedding Dimension {self.takens_n_embed})")
+            ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.2f}, Embedding Dimension {self.takens_n_embed})")
             ax.legend(loc='upper right')
             ax.grid(alpha=0.3)
             plt.tight_layout()

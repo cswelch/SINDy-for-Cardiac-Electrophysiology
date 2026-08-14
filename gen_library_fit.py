@@ -492,6 +492,7 @@ class GenLibraryFit():
         Xembedded = self.takens_X_embedded
         t_emb = self.takens_t
 
+        # TODO Play around with different integrator parameters to diagnose instability (fixed step size here, etc.)
         Xsim = model.simulate(Xembedded[0], t_emb, integrator="odeint")
 
         u_true = Xembedded[:, 0]

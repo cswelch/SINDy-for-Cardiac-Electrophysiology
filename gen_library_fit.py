@@ -493,17 +493,17 @@ class GenLibraryFit():
         t_emb = self.takens_t
 
         # TODO Play around with different integrator parameters to diagnose instability (fixed step size here, etc.)
-        # Xsim = model.simulate(Xembedded[0], t_emb, integrator="odeint")
-        Xsim = model.simulate(Xembedded[0], 
-                              t_emb, 
-                              integrator = 'solve_ivp',
-                              integrator_kws = {
-                                  'method':'RK45',
-                                  'rtol':1e-8,
-                                  'atol':1e-10,
-                                  'max_step':self.dt
-                              }
-                            )
+        Xsim = model.simulate(Xembedded[0], t_emb, integrator="odeint")
+        # Xsim = model.simulate(Xembedded[0], 
+        #                       t_emb, 
+        #                       integrator = 'solve_ivp',
+        #                       integrator_kws = {
+        #                           'method':'RK45',
+        #                           'rtol':1e-8,
+        #                           'atol':1e-10,
+        #                           'max_step':self.dt
+        #                       }
+        #                     )
 
         u_true = Xembedded[:, 0]
         u_sindy = Xsim[:, 0]

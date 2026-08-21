@@ -19,6 +19,7 @@ class GenLibraryFit():
             color (string): Color to use for the original data in the reconstruction plots.
             u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
             v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
+            tau (float): The time delay used for delay / Takens embedding method(s).
     '''
     def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", 
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", 

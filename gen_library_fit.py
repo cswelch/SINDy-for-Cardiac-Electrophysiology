@@ -124,12 +124,12 @@ class GenLibraryFit():
         
         u_short = odeint(fhn_func, ics, t_short)[:, 0]
 
-        # TODO Short trajectory plot for debugging; remove later.
-        plt.plot(t_short, u_short)
-        plt.xlabel('Time')
-        plt.ylabel('u')
-        plt.title('Short Trajectory')
-        plt.show()
+        # TODO Short trajectory plot for debugging
+        # plt.plot(t_short, u_short)
+        # plt.xlabel('Time')
+        # plt.ylabel('u')
+        # plt.title('Short Trajectory')
+        # plt.show()
         
         # Compute Average Mutual Information (AMI) at different lags.
         max_lag = len(u_short) // 10

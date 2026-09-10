@@ -28,7 +28,7 @@ def logical_non_aut(t, period=155.0, dur=5.0, mag=0.12):
 eps = 1e-2  # Error tolerance between estimated and actual voltage
 inc = 1e-2  # Recovery increment / decrement amount
 dt = 1.   # Time step
-t_end = 200 # Upper bound of integration
+t_end = 2000 # Upper bound of integration
 n = int(t_end / dt)   # Number of time steps
 t_fhn = np.arange(0, t_end, dt)    # Time range for integration
 x_0_fhn = np.array([0, 0])   # ICs
@@ -85,4 +85,32 @@ plt.xlabel('t (arbitrary units)')
 plt.ylabel('v (recovery units)')
 plt.title('Estimated Recovery Variable vs. True Recovery Variable Values')
 plt.legend()
+plt.show()
+
+# ------------------------------ Do the SINDy fit ------------------------------
+print('--------- Starting SINDy fit with estimated recovery variable... ---------')
+t_fit = t_fhn[:-1]
+u_fit = states_fhn[:-1, 0]
+v_estimated = np.asarray(estimated_vs)
+
+assert len(t_fit) == len(u_fit) == len(v_estimated)
+
+gen_library_fhn = GenLibraryFit(
+    logical_non_aut,
+    logical_non_aut,
+    fhn_variant="standard",
+    t_range=t_fit,
+    ics=x_0_fhn,
+    color="blue",
+)
+
+# Replace simulated recovery data with estimated recovery data.
+gen_library_fhn.t_fhn_td = t_fit
+gen_library_fhn.dt = t_fit[1] - t_fit[0]
+gen_library_fhn.states_fhn_td = np.column_stack(
+    (u_fit, v_estimated, t_fit)
+)
+
+gen_library_fhn.fit()
+print('--------- SINDy fit finished. ---------')
 plt.show()

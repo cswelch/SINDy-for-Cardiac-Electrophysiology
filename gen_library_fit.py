@@ -5,6 +5,7 @@ from ddeint import ddeint
 from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs, get_fhn_exact_coeffs
 import matplotlib.pyplot as plt
 from sklearn import metrics
+from scipy.signal import find_peaks
 
 class GenLibraryFit():
     '''
@@ -13,7 +14,7 @@ class GenLibraryFit():
         Params:
             non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
             non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-            fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; "standard" for FHN, "cardiac" for FHN-c, and "vf" for VF-b variant.
+            fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, and 'vf' for VF-b variant.
             t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
             ics (1d array): Initial conditions for the FHN equations.
             color (string): Color to use for the original data in the reconstruction plots.
@@ -21,8 +22,8 @@ class GenLibraryFit():
             v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
             tau (float): The time delay used for delay / Takens embedding method(s).
     '''
-    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant="standard", 
-            t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color="blue", 
+    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant='standard', 
+            t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
             u_noise=0.0, v_noise=0.0, tau=None):
         
         # Initialize with Takens embedding using 5 time delays.
@@ -42,26 +43,26 @@ class GenLibraryFit():
         else:
             self.tau = tau
                 
-        if fhn_variant == "standard":
-            self.fhn_name = "standard"
+        if fhn_variant == 'standard':
+            self.fhn_name = 'standard'
             self.fhn_variant = self.fhn_td
-        elif fhn_variant == "cardiac":
-            self.fhn_name = "cardiac"
+        elif fhn_variant == 'cardiac':
+            self.fhn_name = 'cardiac'
             self.fhn_variant = self.fhn_c_td
-        elif fhn_variant == "VF4":
-            self.fhn_name = "VF4"
+        elif fhn_variant == 'VF4':
+            self.fhn_name = 'VF4'
             self.fhn_variant = self.fhn_vf_4_td
-        elif fhn_variant == "VF7":
-            self.fhn_name = "VF7"
+        elif fhn_variant == 'VF7':
+            self.fhn_name = 'VF7'
             self.fhn_variant = self.fhn_vf_7_td
-        elif fhn_variant == "standard_delayed_copy":
-            self.fhn_name = "standard_delayed_copy"
+        elif fhn_variant == 'standard_delayed_copy':
+            self.fhn_name = 'standard_delayed_copy'
             self.fhn_variant = self.fhn_delayed_copy
-        elif fhn_variant == "fhn_auto_osc_delayed_copy":
-            self.fhn_name = "fhn_auto_osc_delayed_copy"
+        elif fhn_variant == 'fhn_auto_osc_delayed_copy':
+            self.fhn_name = 'fhn_auto_osc_delayed_copy'
             self.fhn_variant = self.fhn_auto_osc_delayed_copy
-        elif fhn_variant == "fhn_lode": # The L-ODE variant used in fit_latent_ode() generates with the same FHN data but needs a different name
-            self.fhn_name = "fhn_lode"
+        elif fhn_variant == 'fhn_lode': # The L-ODE variant used in fit_latent_ode() generates with the same FHN data but needs a different name
+            self.fhn_name = 'fhn_lode'
             self.fhn_variant = self.fhn_td
 
         # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
@@ -69,24 +70,24 @@ class GenLibraryFit():
             return self.x_0_fhn_td
 
         # Integrate to get u, v, and t data.
-        if fhn_variant == "standard_delayed_copy":
+        if fhn_variant == 'standard_delayed_copy':
             # Wraps additional arguments sent to delayed function
             fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
             # For any delayed copy variant, use ddeint instead
             self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
-        elif fhn_variant == "fhn_auto_osc_delayed_copy":  # For non-delayed variants, use odeint
+        elif fhn_variant == 'fhn_auto_osc_delayed_copy':  # For non-delayed variants, use odeint
             # Wraps additional arguments sent to delayed function
             fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
             self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
         else:
-            # For non-delayed variants (i.e., "standard" + "cardiac" + "VF4" + "VF7"), use odeint
+            # For non-delayed variants (i.e., 'standard' + 'cardiac' + 'VF4' + 'VF7'), use odeint
             self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1)
             
 
         # int_u = np.trapz(y=self.states_fhn_td[:, 0], dx=0.01)
-        # print(f"Average u value: {int_u / 4000.}")
+        # print(f'Average u value: {int_u / 4000.}')
         # int_v = np.trapz(y=self.states_fhn_td[:, 1], dx=0.01)
-        # print(f"Average v value: {int_v / 4000.}")
+        # print(f'Average v value: {int_v / 4000.}')
 
         # Add Gaussian noise with the given std dev if nonzero values are provided.
         if u_noise > 0.0:
@@ -109,15 +110,15 @@ class GenLibraryFit():
     def _compute_delay(self, fhn_variant, ics, t_short, non_aut_term):
         # Generate short trajectory for analysis.
         variant_functions = {
-            "standard": fhn,
-            "cardiac": fhn_c,
-            "VF4": fhn_vf_4,
-            "VF7": fhn_vf_7,
-            "fhn_lode": fhn,
+            'standard': fhn,
+            'cardiac': fhn_c,
+            'VF4': fhn_vf_4,
+            'VF7': fhn_vf_7,
+            'fhn_lode': fhn,
         }
 
         if fhn_variant not in variant_functions:
-            raise ValueError(f"Unknown FHN variant: {fhn_variant}")
+            raise ValueError(f'Unknown FHN variant: {fhn_variant}')
 
         fhn_func_base = variant_functions[fhn_variant]
         fhn_func = lambda Y, t: fhn_func_base(Y, t, non_aut_term)
@@ -236,12 +237,115 @@ class GenLibraryFit():
             end_time (int): The end time for the simulation and plots (start time is always 0).
             precision (int): Exponent with base 10 representing to what precision to display MAE.
     '''
+    @staticmethod
+    def _detect_beats(t, u):
+        '''Return peak, activation, IBI, and APD90 measurements for a voltage trace.'''
+        t = np.asarray(t, dtype=float)
+        u = np.asarray(u, dtype=float)
+        if t.ndim != 1 or u.ndim != 1 or t.size != u.size or t.size < 3:
+            raise ValueError('t and u must be one-dimensional arrays of equal length.')
+
+        voltage_range = np.ptp(u)
+        if voltage_range <= 0:
+            return {'peaks': np.array([]), 'activations': np.array([]),
+                    'ibi': np.array([]), 'apd90': np.array([])}
+
+        dt = np.median(np.diff(t))
+        min_distance = max(1, int(round(0.05 * t.size * dt / (t[-1] - t[0]))))
+        peaks, _ = find_peaks(
+            u,
+            prominence=max(0.05 * voltage_range, 1e-12),
+            distance=min_distance,
+        )
+
+        activations = []
+        apd90 = []
+        for peak_position, peak_index in enumerate(peaks):
+            next_peak_index = peaks[peak_position + 1] if peak_position + 1 < peaks.size else u.size
+            previous_peak_index = peaks[peak_position - 1] if peak_position else 0
+            search_start = previous_peak_index + 1
+            search_end = max(search_start + 1, peak_index + 1)
+            activation_index = search_start + np.argmax(np.diff(u[search_start:search_end]))
+            baseline = u[activation_index]
+            threshold = baseline + 0.1 * (u[peak_index] - baseline)
+            crossing = np.flatnonzero(u[peak_index:next_peak_index] <= threshold)
+            activations.append(t[activation_index])
+            apd90.append(t[peak_index + crossing[0]] - t[activation_index] if crossing.size else np.nan)
+
+        return {
+            'peaks': t[peaks],
+            'activations': np.asarray(activations),
+            'ibi': np.diff(t[peaks]),
+            'apd90': np.asarray(apd90),
+        }
+
+    def _print_error_statistics(self, t, u_true, u_pred, precision=5):
+        '''Print beat-level reconstruction statistics and return them as a dictionary.'''
+        true_stats = self._detect_beats(t, u_true)
+        pred_stats = self._detect_beats(t, u_pred)
+        true_peaks = true_stats['peaks']
+        pred_peaks = pred_stats['peaks']
+
+        if true_peaks.size > 1:
+            tolerance = 0.5 * np.median(true_stats['ibi'])
+        else:
+            tolerance = 0.1 * (t[-1] - t[0])
+        unmatched = set(range(pred_peaks.size))
+        matches = []
+        for true_index, true_peak in enumerate(true_peaks):
+            candidates = [index for index in unmatched if abs(pred_peaks[index] - true_peak) <= tolerance]
+            if candidates:
+                pred_index = min(candidates, key=lambda index: abs(pred_peaks[index] - true_peak))
+                unmatched.remove(pred_index)
+                matches.append((true_index, pred_index))
+
+        true_count = true_peaks.size
+        predicted_count = pred_peaks.size
+        true_positive = len(matches)
+        recall = true_positive / true_count if true_count else np.nan
+        precision_score = true_positive / predicted_count if predicted_count else np.nan
+        f1 = (2 * precision_score * recall / (precision_score + recall)
+              if np.isfinite(precision_score) and np.isfinite(recall) and precision_score + recall else 0.0)
+
+        def mean_abs(values):
+            values = np.asarray(values, dtype=float)
+            return float(np.nanmean(np.abs(values))) if np.any(np.isfinite(values)) else np.nan
+
+        ibi_count = min(true_stats['ibi'].size, pred_stats['ibi'].size)
+        ibi_error = (mean_abs(pred_stats['ibi'][:ibi_count] - true_stats['ibi'][:ibi_count])
+                 if ibi_count else np.nan)
+        apd90_errors = [pred_stats['apd90'][pred_index] - true_stats['apd90'][true_index]
+                        for true_index, pred_index in matches]
+        activation_errors = [pred_stats['activations'][pred_index] - true_stats['activations'][true_index]
+                             for true_index, pred_index in matches]
+        statistics = {
+            'beat_recall': recall,
+            'beat_f1': f1,
+            'true_mean_ibi': float(np.mean(true_stats['ibi'])) if true_stats['ibi'].size else np.nan,
+            'predicted_mean_ibi': float(np.mean(pred_stats['ibi'])) if pred_stats['ibi'].size else np.nan,
+            'ibi_mae': ibi_error,
+            'apd90_mae': mean_abs(apd90_errors),
+            'activation_time_mae': mean_abs(activation_errors),
+            'true_beats': int(true_count),
+            'predicted_beats': int(predicted_count),
+        }
+        print(f'Beat recall: {recall:.{precision}e} ({true_positive}/{true_count})')
+        print(f'Beat F1: {f1:.{precision}e}')
+        print(f'Mean IBI (true/predicted): {statistics['true_mean_ibi']:.{precision}e} / {statistics['predicted_mean_ibi']:.{precision}e}')
+        print(f'IBI MAE: {ibi_error:.{precision}e}')
+        print(f'APD90 MAE: {statistics['apd90_mae']:.{precision}e}')
+        print(f'Activation time MAE: {statistics['activation_time_mae']:.{precision}e}')
+        return statistics
+
     def reconstruct_and_plot(self, model, t, x_0, u, end_time, precision: int = 5):
         # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
         x_0 = np.concatenate((x_0, np.array([t[0]])))
         model_reconstruction = model.simulate(x_0, t, integrator='odeint')
         mae_reconstruction = metrics.mean_absolute_error(model_reconstruction[:, 0], u) # Compute the mean absolute error between the model voltage and true voltage values.
-        print(f"\n\nMean Absolute Error between reconstruction and true values: {mae_reconstruction:.{precision}e}")
+        print(f'\n\nMean Absolute Error between reconstruction and true values: {mae_reconstruction:.{precision}e}')
+        self.error_statistics = self._print_error_statistics(
+            t, u, model_reconstruction[:, 0], precision=precision
+        )
 
         fig, ax = plt.subplots(2, 1, figsize=(8, 8)) # For presentations and papers, use:  figsize=(8, 8), dpi=200
         plt.tight_layout()
@@ -319,7 +423,7 @@ class GenLibraryFit():
             feature_library=gen_library, 
             optimizer=optimizer
         )
-        model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=["u", "v", "t"])
+        model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=['u', 'v', 't'])
 
         # Create bar chart comparison between SINDy and exact coefficients
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
@@ -362,7 +466,7 @@ class GenLibraryFit():
         
         X_embedded[:, n_embed] = t[total_delay:total_delay + n_samples]
         
-        feature_names = [f"u(t-{i*delay_idx})" for i in range(n_embed)] + ["t"]
+        feature_names = [f'u(t-{i*delay_idx})' for i in range(n_embed)] + ['t']
         
         
         # ------------------------------- Build libraries ------------------------------------
@@ -373,23 +477,23 @@ class GenLibraryFit():
 
         quad_library = ps.CustomLibrary(
             library_functions=[lambda x: x**2],
-            function_names=[lambda x: x + "^2"]
+            function_names=[lambda x: x + '^2']
         )
 
         cubic_library = ps.CustomLibrary(
             library_functions=[lambda x: x**3],
-            function_names=[lambda x: x + "^3"]
+            function_names=[lambda x: x + '^3']
         )
 
         pair_library = ps.CustomLibrary(
             library_functions=[lambda x, y: x * y],
-            function_names=[lambda x, y: x + "*" + y]
+            function_names=[lambda x, y: x + '*' + y]
         )
 
         t_functions = [lambda t: 1.0, self.non_aut_term_fit]
         t_library = ps.CustomLibrary(
             library_functions=t_functions,
-            function_names=[lambda t: "1", lambda t: "f_td(" + t + ")"]
+            function_names=[lambda t: '1', lambda t: 'f_td(' + t + ')']
         )
 
         libraries = []
@@ -444,7 +548,7 @@ class GenLibraryFit():
             feature_library=gen_library,
             optimizer=ps.STLSQ(threshold=0.1, normalize_columns=True),
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(
-                smoother_kws={"window_length": 11, "polyorder": 3}
+                smoother_kws={'window_length': 11, 'polyorder': 3}
             )
         )
         
@@ -455,9 +559,9 @@ class GenLibraryFit():
         )
 
         if printing:
-            print("\n----------- SINDy with Takens Embedding -----------")
-            print(f"Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})")
-            print(f"Embedding dimension = {n_embed}")
+            print('\n----------- SINDy with Takens Embedding -----------')
+            print(f'Optimal time delay τ = {self.tau:.4f} (delay_idx = {delay_idx})')
+            print(f'Embedding dimension = {n_embed}')
             model.print()
             print(gen_library.get_feature_names())
             print('inputs_per_libary: ', inputs_per_library)
@@ -494,7 +598,7 @@ class GenLibraryFit():
         t_emb = self.takens_t
 
         # TODO Play around with different integrator parameters to diagnose instability (fixed step size here, etc.)
-        Xsim = model.simulate(Xembedded[0], t_emb, integrator="odeint")
+        Xsim = model.simulate(Xembedded[0], t_emb, integrator='odeint')
         # Xsim = model.simulate(Xembedded[0], 
         #                       t_emb, 
         #                       integrator = 'solve_ivp',
@@ -511,22 +615,25 @@ class GenLibraryFit():
 
         mae_u = metrics.mean_absolute_error(u_true, u_sindy)
         if printing:
-            print(f"Takens reconstruction MAE (u): {mae_u:.{precision}e}")
+            print(f'Takens reconstruction MAE (u): {mae_u:.{precision}e}')
+            self.error_statistics = self._print_error_statistics(
+                t_emb, u_true, u_sindy, precision=precision
+            )
 
         if plotting:
             fig, ax = plt.subplots(figsize=(8, 4), dpi=200)
-            ax.plot(t_emb, u_true, color=self.color, lw=1.5, label="Exact Solution")
-            ax.plot(t_emb, u_sindy, "k--", lw=1.5, label="SINDy Reconstruction")
+            ax.plot(t_emb, u_true, color=self.color, lw=1.5, label='Exact Solution')
+            ax.plot(t_emb, u_sindy, 'k--', lw=1.5, label='SINDy Reconstruction')
             ax.set_xlim(0, end_time)
-            ax.set_xlabel("t")
-            ax.set_ylabel("u")
-            ax.set_title(f"Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.2f}, Embedding Dimension {self.takens_n_embed})")
+            ax.set_xlabel('t')
+            ax.set_ylabel('u')
+            ax.set_title(f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.2f}, Embedding Dimension {self.takens_n_embed})')
             ax.legend(loc='upper right')
             ax.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
 
-        return mae_u
+        return mae_u, self.error_statistics
 
 
     '''
@@ -682,7 +789,7 @@ class GenLibraryFit():
         #     )
         #     print('Differentiation method parameters: ', cur_model_latent.differentiation_method.get_params())
 
-        #     cur_model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
+        #     cur_model_latent.fit(X_with_time, t=t, feature_names=['u', 'u_dot', 't']) # Pass X_with_time (3 cols); t handles implicit time column usage.
 
         #     # Save only if it beats all other fits
         #     if (cur_mae > last_mae):
@@ -702,15 +809,15 @@ class GenLibraryFit():
         # mode, pass scalar dt to satisfy SINDy.fit API while avoiding axis-map
         # conflicts triggered by passing a full time vector.
         if (is_weak):
-            model_latent.fit(X_with_time, t=self.dt, feature_names=["u", "u_dot", "t"])
+            model_latent.fit(X_with_time, t=self.dt, feature_names=['u', 'u_dot', 't'])
         else:
-            model_latent.fit(X_with_time, t=t, feature_names=["u", "u_dot", "t"]) # Pass X_with_time (3 cols); t handles implicit time column usage.
+            model_latent.fit(X_with_time, t=t, feature_names=['u', 'u_dot', 't']) # Pass X_with_time (3 cols); t handles implicit time column usage.
 
         # Debugging — Print number of features for each library and shape of the input data
-        # print(f"Number of features in u_only library: {u_only_library.n_output_features_}")
-        # print(f"Number of features in u_and_u_dot library: {u_and_u_dot_library.n_output_features_}")
-        # print(f"Number of features in time library: {t_library.n_output_features_}")
-        # print(f"Number of features in generalized library: {gen_library.n_output_features_}")
+        # print(f'Number of features in u_only library: {u_only_library.n_output_features_}')
+        # print(f'Number of features in u_and_u_dot library: {u_and_u_dot_library.n_output_features_}')
+        # print(f'Number of features in time library: {t_library.n_output_features_}')
+        # print(f'Number of features in generalized library: {gen_library.n_output_features_}')
         # print(X_with_time.shape)
         # print(t.shape)
 

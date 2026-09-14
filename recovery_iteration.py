@@ -15,13 +15,17 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
     the next value, etc.
 '''
 
-# Logical step function non-autonomous term.
+# Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
 # Params:
 #   t (1d array): Time input vector
 #   period (float): The period of the stimulus
 #   dur (float): The time duration of the stimulus
 #   mag (float): The magnitude of the stimulus
-def logical_non_aut(t, period=155.0, dur=5.0, mag=0.12):
+def stimulus(t):
+    period=155.0
+    dur=5.0
+    mag=0.12
+
     stimulus = mag * (np.mod(t, period) <= dur)
     return stimulus
 
@@ -32,7 +36,7 @@ t_end = 2000 # Upper bound of integration
 n = int(t_end / dt)   # Number of time steps
 t_fhn = np.arange(0, t_end, dt)    # Time range for integration
 x_0_fhn = np.array([0, 0])   # ICs
-states_fhn = odeint(fhn, x_0_fhn, t_fhn, args=(logical_non_aut,), hmax=0.01) # Real n x 2 reference matrix of [u, v]
+states_fhn = odeint(fhn, x_0_fhn, t_fhn, args=(stimulus,), hmax=0.01) # Real n x 2 reference matrix of [u, v]
 
 # Start w/ initial recovery variable value
 v_old_est = 0
@@ -47,7 +51,7 @@ for i in range(n-1):
     # Assume we don't know the recovery variable (e.g., it can't be measured), then vary its value until u_new is sufficiently close to u_new_est
     ics_cur = np.array([u_old, v_old_est])
     t_cur = np.array([t_old, t_new])
-    out = odeint(fhn, ics_cur, t_cur, args=(logical_non_aut,), hmax=dt)
+    out = odeint(fhn, ics_cur, t_cur, args=(stimulus,), hmax=dt)
     u_new_est, v_new_est = out[1, 0], out[1, 1]
     print(f't_old: {t_old}, t_new: {t_new}, u_old: {u_old}, u_new: {u_new}, u_new_est: {u_new_est}, v_old_est: {v_old_est}, v_new_est: {v_new_est}')
         
@@ -62,7 +66,7 @@ for i in range(n-1):
 
         ics_cur = np.array([u_old, v_old_est])
         t_cur = np.array([t_old, t_new])
-        out = odeint(fhn, ics_cur, t_cur, args=(logical_non_aut,), hmax=dt)
+        out = odeint(fhn, ics_cur, t_cur, args=(stimulus,), hmax=dt)
         u_new_est, v_new_est = out[1, 0], out[1, 1]
 
         print(f't_old: {t_old}, t_new: {t_new}, u_old: {u_old}, u_new: {u_new}, u_new_est: {u_new_est}, v_old_est: {v_old_est}, v_new_est: {v_new_est}')
@@ -96,12 +100,13 @@ v_estimated = np.asarray(estimated_vs)
 assert len(t_fit) == len(u_fit) == len(v_estimated)
 
 gen_library_fhn = GenLibraryFit(
-    logical_non_aut,
-    logical_non_aut,
+    stimulus,
+    stimulus,
     fhn_variant="standard",
     t_range=t_fit,
     ics=x_0_fhn,
     color="blue",
+    optimizer=ps.STLSQ(threshold=0.001, normalize_columns=True)
 )
 
 # Replace simulated recovery data with estimated recovery data.

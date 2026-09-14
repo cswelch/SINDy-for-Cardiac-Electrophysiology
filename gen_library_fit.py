@@ -21,10 +21,11 @@ class GenLibraryFit():
             u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
             v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
             tau (float): The time delay used for delay / Takens embedding method(s).
+            optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). Default is STLSQ with threshold=0.1 and normalize_columns=True.
     '''
     def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant='standard', 
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
-            u_noise=0.0, v_noise=0.0, tau=None):
+            u_noise=0.0, v_noise=0.0, tau=None, optimizer=ps.STLSQ(threshold=0.1, normalize_columns=True)):
         
         # Initialize with Takens embedding using 5 time delays.
         self.t_fhn_td = t_range
@@ -42,6 +43,8 @@ class GenLibraryFit():
                                         non_aut_term_data)
         else:
             self.tau = tau
+
+        self.optimizer = optimizer
                 
         if fhn_variant == 'standard':
             self.fhn_name = 'standard'
@@ -133,7 +136,7 @@ class GenLibraryFit():
         # plt.show()
         
         # Compute Average Mutual Information (AMI) at different lags.
-        max_lag = len(u_short) // 10
+        max_lag = len(u_short) // 10    # TODO Could this floor be too low? (100 // 10 = 10 is max value)
         ami = np.zeros(max_lag)
         
         for lag in range(1, max_lag):
@@ -146,7 +149,7 @@ class GenLibraryFit():
             ami[lag] = abs(correlation)
         
         # First minimum gives good delay (where AMI first drops significantly).
-        first_min_idx = np.argmax(np.gradient(np.gradient(ami[:max_lag//2])))
+        first_min_idx = np.argmax(np.gradient(np.gradient(ami[:max_lag // 2])))
         optimal_delay = max(1, first_min_idx)
         
         # Convert from steps to time.
@@ -185,6 +188,7 @@ class GenLibraryFit():
         Define versions with v' defined as delayed version of u' equation. Done as FHN system to be
         passed to ddeint where Y(t) gives current values and Y(t-tau) gives delayed values.
     '''
+    @staticmethod
     def fhn_delayed_copy(Y, t, non_aut_term, tau, alpha=0.1):
         u, v = Y(t)
         
@@ -207,8 +211,8 @@ class GenLibraryFit():
     '''
         Define delayed copy variant for auto-oscillatory case of FHN.
     '''
-    # TODO Finish fhn_auto_osc_delayed_copy.
     # Define versions with v' defined as delayed version of u' equation
+    @staticmethod
     def fhn_auto_osc_delayed_copy(Y, t, tau, alpha=0.1):
         u, v = Y(t)
         
@@ -418,10 +422,9 @@ class GenLibraryFit():
         gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
         # Do the SINDy fit
-        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True)
         model_fhn_td = ps.SINDy(
             feature_library=gen_library, 
-            optimizer=optimizer
+            optimizer=self.optimizer # ps.SSR(alpha=0.5, normalize_columns=False) # ps.SSR(alpha=2e-1, normalize_columns=True)
         )
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=['u', 'v', 't'])
 
@@ -546,7 +549,7 @@ class GenLibraryFit():
 
         model = ps.SINDy(
             feature_library=gen_library,
-            optimizer=ps.STLSQ(threshold=0.1, normalize_columns=True),
+            optimizer=self.optimizer,
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(
                 smoother_kws={'window_length': 11, 'polyorder': 3}
             )
@@ -643,7 +646,7 @@ class GenLibraryFit():
             is_weak (bool): True specifies use of weak formulation for each of the 4 libraries; false uses normal CustomLibrary implementations.
             end_time (int): The end time for the simulation and plots (start time is always 0).
         '''
-    def fit_latent_ODE(self, is_weak=False, end_time=400):
+    def fit_latent_ode(self, is_weak=False, end_time=400):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.
         u_obs = self.states_fhn_td[:, 0]
         t = self.t_fhn_td
@@ -797,10 +800,9 @@ class GenLibraryFit():
         # Fit SINDy model.
         #    Target: \dot{X} = [\dot{u}, \ddot{u}]. 
         #    SINDy learns: u' = u_dot (trivial), u'' = f(...) (nontrivial)
-        optimizer = ps.STLSQ(threshold=0.1, normalize_columns=True) # ps.SSR(alpha=2e-1, normalize_columns=True)
         model_latent = ps.SINDy(
             feature_library=feature_library, 
-            optimizer=optimizer,
+            optimizer=self.optimizer, # ps.SSR(alpha=2e-1, normalize_columns=True)
             differentiation_method=ps.differentiation.SmoothedFiniteDifference(smoother_kws={'window_length': 5}) # Window length should be an odd number (results may be unexpected if even)
         )
         print('Differentiation method parameters: ', model_latent.differentiation_method.get_params())

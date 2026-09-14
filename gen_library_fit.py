@@ -377,7 +377,7 @@ class GenLibraryFit():
     '''
     Fit the model using a GeneralizedLibrary with variable-specific libraries for u, v, and t.
     Params:
-        non_aut_func (function): A function that takes time as input and returns a non-autonomous term.
+        end_time: The rightmost time value shown on plots of the fit results.
     Returns:
         model_fhn_td (pysindy.SINDy): A fitted SINDy model with the specified non-autonomous term.
     '''

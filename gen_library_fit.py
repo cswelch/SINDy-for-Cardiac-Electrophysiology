@@ -21,11 +21,11 @@ class GenLibraryFit():
             u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
             v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
             tau (float): The time delay used for delay / Takens embedding method(s).
-            optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). Default is STLSQ with threshold=0.1 and normalize_columns=True.
+            optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults to STLSQ with threshold=0.1 and normalize_columns=True.
     '''
     def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant='standard', 
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
-            u_noise=0.0, v_noise=0.0, tau=None, optimizer=ps.STLSQ(threshold=0.1, normalize_columns=True)):
+            u_noise=0.0, v_noise=0.0, tau=None, optimizer=None):
         
         # Initialize with Takens embedding using 5 time delays.
         self.t_fhn_td = t_range
@@ -44,7 +44,8 @@ class GenLibraryFit():
         else:
             self.tau = tau
 
-        self.optimizer = optimizer
+        self.optimizer = (ps.STLSQ(threshold=0.1, normalize_columns=True)
+                  if optimizer is None else optimizer)
                 
         if fhn_variant == 'standard':
             self.fhn_name = 'standard'
@@ -424,7 +425,7 @@ class GenLibraryFit():
         # Do the SINDy fit
         model_fhn_td = ps.SINDy(
             feature_library=gen_library, 
-            optimizer=self.optimizer # ps.SSR(alpha=0.5, normalize_columns=False) # ps.SSR(alpha=2e-1, normalize_columns=True)
+            optimizer=self.optimizer
         )
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=['u', 'v', 't'])
 

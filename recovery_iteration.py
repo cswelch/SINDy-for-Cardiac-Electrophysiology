@@ -106,7 +106,7 @@ gen_library_fhn = GenLibraryFit(
     t_range=t_fit,
     ics=x_0_fhn,
     color="blue",
-    optimizer=ps.STLSQ(threshold=0.001, normalize_columns=True)
+    optimizer=ps.STLSQ(threshold=0.001, normalize_columns=True) # ps.SSR(alpha=2e-1, normalize_columns=True) 
 )
 
 # Replace simulated recovery data with estimated recovery data.

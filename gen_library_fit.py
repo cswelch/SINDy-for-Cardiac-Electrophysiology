@@ -9,19 +9,19 @@ from scipy.signal import find_peaks
 
 class GenLibraryFit():
     '''
-        Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
-        non-autonomous term function.
-        Params:
-            non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
-            non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-            fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, and 'vf' for VF-b variant.
-            t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
-            ics (1d array): Initial conditions for the FHN equations.
-            color (string): Color to use for the original data in the reconstruction plots.
-            u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
-            v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
-            tau (float): The time delay used for delay / Takens embedding method(s).
-            optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults to STLSQ with threshold=0.1 and normalize_columns=True.
+    Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
+    non-autonomous term function.
+    Params:
+        non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
+        non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
+        fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, and 'vf' for VF-b variant.
+        t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
+        ics (1d array): Initial conditions for the FHN equations.
+        color (string): Color to use for the original data in the reconstruction plots.
+        u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
+        v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
+        tau (float): The time delay used for delay / Takens embedding method(s).
+        optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults to STLSQ with threshold=0.1 and normalize_columns=True.
     '''
     def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant='standard', 
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
@@ -109,7 +109,7 @@ class GenLibraryFit():
 
 
     '''
-        Estimate optimal time delay using Average Mutual Information (AMI).
+    Estimate optimal time delay using Average Mutual Information (AMI).
     '''
     def _compute_delay(self, fhn_variant, ics, t_short, non_aut_term):
         # Generate short trajectory for analysis.
@@ -158,12 +158,12 @@ class GenLibraryFit():
 
 
     '''
-        FitzHugh-Nagumo equations modified with an additional equation for time.
-        Params:
-            state (2d array):        Contains the state variables u and v
-            t (1d array):            Time input
-            non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
-            alpha, beta, gamma, delta, eps, [theta, mu] (float): Parameters for the FHN equations.
+    FitzHugh-Nagumo equations modified with an additional equation for time.
+    Params:
+        state (2d array):        Contains the state variables u and v
+        t (1d array):            Time input
+        non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
+        alpha, beta, gamma, delta, eps, [theta, mu] (float): Parameters for the FHN equations.
     '''
     # Define standard FHN w/ non_aut_term_data term
     def fhn_td(self, state, t):
@@ -186,8 +186,8 @@ class GenLibraryFit():
     
 
     '''
-        Define versions with v' defined as delayed version of u' equation. Done as FHN system to be
-        passed to ddeint where Y(t) gives current values and Y(t-tau) gives delayed values.
+    Define versions with v' defined as delayed version of u' equation. Done as FHN system to be
+    passed to ddeint where Y(t) gives current values and Y(t-tau) gives delayed values.
     '''
     @staticmethod
     def fhn_delayed_copy(Y, t, non_aut_term, tau, alpha=0.1):
@@ -210,7 +210,7 @@ class GenLibraryFit():
         # return fhn_u_dot_copy(state, t, self.non_aut_term_data)
 
     '''
-        Define delayed copy variant for auto-oscillatory case of FHN.
+    Define delayed copy variant for auto-oscillatory case of FHN.
     '''
     # Define versions with v' defined as delayed version of u' equation
     @staticmethod
@@ -233,18 +233,10 @@ class GenLibraryFit():
         return np.array([u_dot, v_dot])
 
     '''
-        Reconstruct the system using the fitted SINDy model and plot the results.
-        Params:
-            model (pysindy.SINDy): A fitted SINDy model.
-            t (1d array): Time range for simulation.
-            x_0 (1d array): Initial conditions for simulation.
-            u (1d array): The voltage values of the fhn states array, which itself contains u, v, and t columns in that order.
-            end_time (int): The end time for the simulation and plots (start time is always 0).
-            precision (int): Exponent with base 10 representing to what precision to display MAE.
+    Return peak, activation, IBI, and APD90 measurements for a voltage trace.
     '''
     @staticmethod
     def _detect_beats(t, u):
-        '''Return peak, activation, IBI, and APD90 measurements for a voltage trace.'''
         t = np.asarray(t, dtype=float)
         u = np.asarray(u, dtype=float)
         if t.ndim != 1 or u.ndim != 1 or t.size != u.size or t.size < 3:
@@ -284,8 +276,10 @@ class GenLibraryFit():
             'apd90': np.asarray(apd90),
         }
 
+    '''
+    Print beat-level reconstruction statistics and return them as a dictionary.
+    '''
     def _print_error_statistics(self, t, u_true, u_pred, precision=5):
-        '''Print beat-level reconstruction statistics and return them as a dictionary.'''
         true_stats = self._detect_beats(t, u_true)
         pred_stats = self._detect_beats(t, u_pred)
         true_peaks = true_stats['peaks']
@@ -342,6 +336,16 @@ class GenLibraryFit():
         print(f'Activation time MAE: {statistics['activation_time_mae']:.{precision}e}')
         return statistics
 
+    '''
+    Reconstruct the system using the fitted SINDy model and plot the results.
+    Params:
+        model (pysindy.SINDy): A fitted SINDy model.
+        t (1d array): Time range for simulation.
+        x_0 (1d array): Initial conditions for simulation.
+        u (1d array): The voltage values of the fhn states array, which itself contains u, v, and t columns in that order.
+        end_time (int): The end time for the simulation and plots (start time is always 0).
+        precision (int): Exponent with base 10 representing to what precision to display MAE.
+    '''
     def reconstruct_and_plot(self, model, t, x_0, u, end_time, precision: int = 5):
         # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
         x_0 = np.concatenate((x_0, np.array([t[0]])))
@@ -439,14 +443,14 @@ class GenLibraryFit():
 
 
     '''
-        Fit SINDy using Takens time-delay embedding with the specified number of dimensions.
-        Reconstructs the 2D phase space from a single measured variable u.
-        Params:
-            is_cubic (boolean): If True, includes cubic terms in the library; if False, only includes linear and quadratic terms.
-            printing (boolean): If True, prints the fit and library details.
-            n_embed (int): Number of dimensions to use in Takens embedding (i.e., number of time delays).
-        Returns:
-            model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
+    Fit SINDy using Takens time-delay embedding with the specified number of dimensions.
+    Reconstructs the 2D phase space from a single measured variable u.
+    Params:
+        is_cubic (boolean): If True, includes cubic terms in the library; if False, only includes linear and quadratic terms.
+        printing (boolean): If True, prints the fit and library details.
+        n_embed (int): Number of dimensions to use in Takens embedding (i.e., number of time delays).
+    Returns:
+        model (pysindy.SINDy): A fitted SINDy model w/ the Takens embedding.
     '''
     def fit_takens(self, printing=True, is_cubic=True, n_embed=7):
         # Constrain ourselves to extract only u and t since v wouldn't be observable experimentally.

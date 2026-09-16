@@ -31,10 +31,12 @@ def stimulus(t):
     stimulus = mag * (np.mod(t, period) <= dur)
     return stimulus
 
-dt = 1e-1   # Time step
-t_end = 2000 # Upper bound of integration
-n = int(t_end / dt)   # Number of time steps
-t_fhn = np.arange(0, t_end, dt)    # Time range for integration
+dt = 0.1    # Time step
+root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
+t_end_sim = 2000    # Upper bound of integration
+t_end_vis = 400     # Upper bound of x-axis on plots
+n = int(t_end_sim / dt)   # Number of time steps
+t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
 x_0_fhn = np.array([0, 0])   # ICs
 states_fhn = odeint(fhn, x_0_fhn, t_fhn, args=(stimulus,), hmax=0.01) # Real n x 2 reference matrix of [u, v]
 
@@ -61,7 +63,7 @@ for i in range(n-1):
         lower -= 0.05
         upper += 0.05
 
-    v_old_est = cast(float, brentq(voltage_error, lower, upper, xtol=1e-8))
+    v_old_est = cast(float, brentq(voltage_error, lower, upper, rtol=root_find_rel_tol))
 
     estimated_vs.append(v_old_est)
 
@@ -72,6 +74,7 @@ plt.figure()
 plt.plot(t_fhn, states_fhn[:, 0])
 plt.title('Measured Voltages')
 plt.xlabel('t (arbitrary units)')
+plt.xlim(0, t_end_vis)
 plt.ylabel('u (V)')
 
 plt.figure()
@@ -79,6 +82,7 @@ plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
 plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
 plt.title('Estimated vs. True Recovery Variable Values')
 plt.xlabel('t (arbitrary units)')
+plt.xlim(0, t_end_vis)
 plt.ylabel('v (recovery units)')
 plt.legend()
 plt.show()
@@ -108,6 +112,6 @@ gen_library_fhn.states_fhn_td = np.column_stack(
     (u_fit, v_estimated, t_fit)
 )
 
-gen_library_fhn.fit(end_time=t_end)
+gen_library_fhn.fit(end_time=t_end_vis)
 print('--------- SINDy fit finished. ---------')
 plt.show()

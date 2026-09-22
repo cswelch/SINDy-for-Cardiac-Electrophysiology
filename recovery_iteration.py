@@ -85,7 +85,7 @@ t_end_vis = 2000     # Upper bound of x-axis on plots
 n = int(t_end_sim / dt)   # Number of time steps
 t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
 x_0_fhn = np.array([0, 0])   # ICs
-states_fhn = odeint(fhn, x_0_fhn, t_fhn, args=(func_pacedown,), hmax=0.01) # Real n x 2 reference matrix of [u, v]
+states_fhn = odeint(fhn_c, x_0_fhn, t_fhn, args=(func_pacedown,), hmax=0.01) # Real n x 2 reference matrix of [u, v]
 
 # Start w/ initial recovery variable value
 v_old_est = 0
@@ -101,7 +101,7 @@ for i in range(n-1):
     def voltage_error(v_candidate):
         ics_cur = np.array([u_old, v_candidate])
         t_cur = np.array([t_old, t_new])
-        out = odeint(fhn, ics_cur, t_cur, args=(func_pacedown,), hmax=0.01)
+        out = odeint(fhn_c, ics_cur, t_cur, args=(func_pacedown,), hmax=0.01)
         return out[1, 0] - u_new
 
     lower = v_old_est - 0.05

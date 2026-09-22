@@ -8,3 +8,4 @@ pysindy>=2.1.0
 scikit-learn
 scipy
 sympy
+nbformat>=4.2.0

@@ -31,9 +31,9 @@ for period in [155.0, 185.0, 225.0]:
             max_coef = np.max(np.abs(coef))
             nz = np.sum(np.abs(coef) > 1e-8)
             print(
-                f"period={period:>6.1f} cubic={is_cubic} MAE={mae:.3e} "
-                f"condX={cond_x:.3e} condTheta={cond_theta:.3e} "
-                f"max|coef|={max_coef:.3e} nz={nz}"
+                f'period={period:>6.1f} cubic={is_cubic} MAE={mae:.3e} '
+                f'condX={cond_x:.3e} condTheta={cond_theta:.3e} '
+                f'max|coef|={max_coef:.3e} nz={nz}'
             )
         except Exception as exc:
-            print(f"period={period:>6.1f} cubic={is_cubic} ERROR {type(exc).__name__}: {exc}")
+            print(f'period={period:>6.1f} cubic={is_cubic} ERROR {type(exc).__name__}: {exc}')

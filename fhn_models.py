@@ -96,40 +96,41 @@ Returns:
     None
 Params:
     model (ps.SINDy):   The SINDy model from which to extract the fit coefficients.
-    fhn_name (str):     The fhn method (chosen from 1. "standard" 2. "cardiac" 3. "vf") used to evaluate the exact coefficients.
+    fhn_name (str):     The name of the FHN variant to use; 'standard', 'cardiac', 'VF4', 'VF7, and 'fhn_lode' are available options. Used to
+                        evaluate the exact coefficients.
     precision (int):    Exponent with base 10 of tolerance below which terms are considered zero. (E.g., 5 for 1e-5.)
 '''
 def compare_exact_and_sindy_coeffs(model: ps.SINDy, fhn_name: str, non_aut_term_data: Callable, non_aut_term_fit: Callable, precision: int = 5):
     # Order of coefficients: 1, u, v, u^2, uv, v^2, u^3, u^2v, uv^2, v^3
     # Use SymPy to symbolically evaluate the FHN variant, summing like terms and extracting the coefficients.
     monomial_names = model.get_feature_names()
-    # print(f"Monomials: {monomial_names}")
+    # print(f'Monomials: {monomial_names}')
     coef_sindy = model.coefficients()
     coef_exact = get_fhn_exact_coeffs(fhn_name=fhn_name, monomial_names=monomial_names)
 
     # TODO Handle different u', v' names for L-ODE case?
     # Compare number of terms in the SINDy model to the exact coefficients.
     tol = 10**(-precision)
-    print(f"Number of SINDy terms for u\', v\': ({np.sum(np.abs(coef_sindy[0]) > tol)}, {np.sum(np.abs(coef_sindy[1]) > tol)})")
-    print(f"Number of exact terms for u\', v\': ({np.sum(np.abs(coef_exact[0]) > tol)}, {np.sum(np.abs(coef_exact[1]) > tol)})")
+    print(f'Number of SINDy terms for u\', v\': ({np.sum(np.abs(coef_sindy[0]) > tol)}, {np.sum(np.abs(coef_sindy[1]) > tol)})')
+    print(f'Number of exact terms for u\', v\': ({np.sum(np.abs(coef_exact[0]) > tol)}, {np.sum(np.abs(coef_exact[1]) > tol)})')
     mae_coef = metrics.mean_absolute_error(coef_exact, coef_sindy[0:2])
-    print(f"Mean Absolute Error of coefficients: {mae_coef:.{precision}e}")
+    print(f'Mean Absolute Error of coefficients: {mae_coef:.{precision}e}')
 
     # Compare the SINDy and exact coefficients.
-    print("\nSINDy coefficients:")
+    print('\nSINDy coefficients:')
     model.print(precision=precision)
-    print("\nExact coefficients:")
+    print('\nExact coefficients:')
     for i in range(len(coef_exact)):
-        eqn = ""
-        eqn += ("u\' = " if i == 0 else "v\' = ")
+        eqn = ''
+        eqn += ('u\' = ' if i == 0 else 'v\' = ')
         # Return the index of the final nonzero coefficient in the current equation (or -1 if all coefficients are zero).
         final_nonzero_index = np.nonzero(np.abs(coef_exact[i]) > tol)[0][-1] if np.any(np.abs(coef_exact[i]) > tol) else -1
         
         for j in range(len(coef_exact[0])):
             if (np.abs(coef_exact[i][j]) > tol) and (j < final_nonzero_index):  # Print only nonzero coefficients.
-                eqn += f"{coef_exact[i][j]:.{precision}f} {monomial_names[j]} + "
+                eqn += f'{coef_exact[i][j]:.{precision}f} {monomial_names[j]} + '
             elif (j == final_nonzero_index):  # Handle the last term separately.
-                eqn += f"{coef_exact[i][j]:.{precision}f} {monomial_names[j]}"
+                eqn += f'{coef_exact[i][j]:.{precision}f} {monomial_names[j]}'
         print(eqn)
 
 
@@ -170,11 +171,11 @@ Get the exact coefficients for the FHN equations using SymPy.
 Returns:
     (np.array): 2D array containing u' and v' coefficients, respectively.
 Params:
-    fhn_variant (str):              The variant of the FHN equations to use. Options are "standard", "cardiac", or "vf".
+    fhn_name (str):                 The name of the variant of the FHN equations to use; 'standard', 'cardiac', 'VF4', 'VF7, and 'fhn_lode' are available options.
     monomial_names (list of str):   List of monomial names to use in the equations.
     params (dict):                  Optional dictionary of parameters to use for the FHN equations. If None, default parameters are used.
 '''
-def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u**3', 'v', '1', 'f_td'], params=None):
+def get_fhn_exact_coeffs(fhn_name='standard', monomial_names = ['u', 'u**2', 'u**3', 'v', '1', 'f_td'], params=None):
     # Define symbols
     u, v, f_td = sym.symbols('u v f_td')
 
@@ -182,38 +183,38 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
     if 'f_td(t)' in monomial_names:
         monomial_names[monomial_names.index('f_td(t)')] = 'f_td'
 
-    # print(f"Edited monomial names: {monomial_names}")
+    # print(f'Edited monomial names: {monomial_names}')
 
     # Default parameters
     if params is None:
-        if fhn_name == "standard":
+        if fhn_name == 'standard':
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
-        elif fhn_name == "cardiac":
+        elif fhn_name == 'cardiac':
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
-        elif fhn_name == "VF4":
+        elif fhn_name == 'VF4':
             params = dict(alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0)
-        elif fhn_name == "VF7":
+        elif fhn_name == 'VF7':
             params = dict(alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0)
-        elif fhn_name == "fhn_lode":
+        elif fhn_name == 'fhn_lode':
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         else:
-            raise ValueError("Unknown FHN variant")
+            raise ValueError('Unknown FHN variant')
 
     # TODO Would like to use preexisting functions from this module to avoid code duplication, but they aren't currently working with SymPy.
     # Build symbolic equations
-    if fhn_name == "standard":
+    if fhn_name == 'standard':
         u_rhs = u*(1-u)*(u-params['alpha']) - v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
-    elif fhn_name == "cardiac":
+    elif fhn_name == 'cardiac':
         u_rhs = u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
-    elif fhn_name == "VF4":
+    elif fhn_name == 'VF4':
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(u*(params['beta']-u) - v)
-    elif fhn_name == "VF7":
+    elif fhn_name == 'VF7':
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*((params['beta']-u)*(u-params['gamma']) - params['delta']*v - params['theta'])
-    elif fhn_name == "fhn_lode":
+    elif fhn_name == 'fhn_lode':
         # L-ODE formulation: eliminates v from standard FHN to get a 2nd-order ODE for u.
         # Returns coefficients for (u_dot, u_dot_dot) instead of (u_dot, v_dot).
         u_dot_sym = sym.Symbol('u_dot')
@@ -249,7 +250,7 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
 
         return np.array([u_dot_coeffs, u_dot_dot_coeffs])
     else:
-        raise ValueError("Unknown FHN variant")
+        raise ValueError('Unknown FHN variant')
 
     # Expand and collect coefficients
     u_rhs_exp = sym.expand(u_rhs).as_poly(u, v, f_td)
@@ -259,9 +260,9 @@ def get_fhn_exact_coeffs(fhn_name="standard", monomial_names = ['u', 'u**2', 'u*
 
     u_coeffs = [float(u_rhs_exp.coeff_monomial(m)) for m in m_sym]
     v_coeffs = [float(v_rhs_exp.coeff_monomial(m)) for m in m_sym]
-    # print("u_rhs_exp:", u_rhs_exp)
-    # print("v_rhs_exp:", v_rhs_exp)
-    # print("u_coeffs:", u_coeffs)
-    # print("v_coeffs:", v_coeffs)
+    # print('u_rhs_exp:', u_rhs_exp)
+    # print('v_rhs_exp:', v_rhs_exp)
+    # print('u_coeffs:', u_coeffs)
+    # print('v_coeffs:', v_coeffs)
 
     return np.array([u_coeffs, v_coeffs])

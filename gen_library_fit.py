@@ -14,14 +14,17 @@ class GenLibraryFit():
     Params:
         non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
         non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-        fhn_variant (string): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, and 'vf' for VF-b variant.
+        fhn_variant (str): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, 'VF4' for the 
+                           4-parameter Velasco-Fenton model, 'VF7' for the 7-parameter Velasco-Fenton model, and 'fhn_lode' for Latent-
+                           ODE FHN.
         t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
         ics (1d array): Initial conditions for the FHN equations.
         color (string): Color to use for the original data in the reconstruction plots.
         u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
         v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
         tau (float): The time delay used for delay / Takens embedding method(s).
-        optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults to STLSQ with threshold=0.1 and normalize_columns=True.
+        optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults 
+                                       to STLSQ with threshold=0.1 and normalize_columns=True.
     '''
     def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant='standard', 
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
@@ -330,10 +333,14 @@ class GenLibraryFit():
         }
         print(f'Beat recall: {recall:.{precision}e} ({true_positive}/{true_count})')
         print(f'Beat F1: {f1:.{precision}e}')
-        print(f'Mean IBI (true/predicted): {statistics['true_mean_ibi']:.{precision}e} / {statistics['predicted_mean_ibi']:.{precision}e}')
+        true_mean_ibi = statistics['true_mean_ibi']
+        predicted_mean_ibi = statistics['predicted_mean_ibi']
+        print(f'Mean IBI (true/predicted): {true_mean_ibi:.{precision}e} / {predicted_mean_ibi:.{precision}e}')
         print(f'IBI MAE: {ibi_error:.{precision}e}')
-        print(f'APD90 MAE: {statistics['apd90_mae']:.{precision}e}')
-        print(f'Activation time MAE: {statistics['activation_time_mae']:.{precision}e}')
+        apd90_mae = statistics['apd90_mae']
+        activation_time_mae = statistics['activation_time_mae']
+        print(f'APD90 MAE: {apd90_mae:.{precision}e}')
+        print(f'Activation time MAE: {activation_time_mae:.{precision}e}')
         return statistics
 
     '''

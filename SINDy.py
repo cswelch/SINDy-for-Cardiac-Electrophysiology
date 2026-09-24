@@ -4,9 +4,9 @@ from itertools import combinations_with_replacement
 from math import factorial
 
 class SINDy():
-    """SINDy class to determine active terms in function space of a 
+    '''SINDy class to determine active terms in function space of a 
     given dataset of a dynamical system.
-    """
+    '''
     
     def __init__(self, lambda_=0.025, n=10, poly_power=3, feature_names='xyz'):
         self.lambda_ = lambda_
@@ -22,10 +22,10 @@ class SINDy():
         self._Xi = self.sparsify_dynamics(X, dx_dt)
         self._functions = self.function_vector()
 
-        print("Functions:\n", self._functions)
-        print("\nFit coefficients (Xi):\n", self._Xi)
+        print('Functions:\n', self._functions)
+        print('\nFit coefficients (Xi):\n', self._Xi)
 
-        Xi = np.column_stack((self._functions, self._Xi.astype(dtype=np.dtype("<U6"))))
+        Xi = np.column_stack((self._functions, self._Xi.astype(dtype=np.dtype('<U6'))))
         return Xi
         
     def polynomial_combination(self, states, degrees):
@@ -66,10 +66,10 @@ class SINDy():
     def function_vector(self):
         for i in range(self.poly_power+1):
             if i == 0:
-                self._functions.append("1")
+                self._functions.append('1')
             else:
                 for combo in combinations_with_replacement(self._feature_names, i):
-                    self._functions.append("".join(combo))
+                    self._functions.append(''.join(combo))
         return np.array(self._functions)
     
     def equations(self):
@@ -78,11 +78,11 @@ class SINDy():
         for i in range(self._states):
             eqn = self._functions[np.argwhere(np.abs(self._Xi[:, i]) > 0)].flatten()
             coeff = self._Xi[:, i][np.argwhere(np.abs(self._Xi[:, i]) > 0)].flatten()
-            coeff = coeff.astype(dtype="<U6")
-            p=feature_names_list[i] + "\' = "
+            coeff = coeff.astype(dtype='<U6')
+            p = feature_names_list[i] + '\' = '
             for j in range(len(eqn)):
                 if j != list(range(len(eqn)))[-1]:
-                    p = p + str(coeff[j] + eqn[j] + " + ")
+                    p = p + str(coeff[j] + eqn[j] + ' + ')
                 else:
                     p = p + str(coeff[j] + eqn[j])
             eqn_system.append(p)

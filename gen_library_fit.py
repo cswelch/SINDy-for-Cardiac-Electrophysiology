@@ -14,8 +14,8 @@ class GenLibraryFit():
     Params:
         non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
         non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-        fhn_variant (str): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, 'VF4' for the 
-                           4-parameter Velasco-Fenton model, 'VF7' for the 7-parameter Velasco-Fenton model, and 'fhn_lode' for Latent-
+        fhn_variant (str): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, 'vf4' for the 
+                           4-parameter Velasco-Fenton model, 'vf7' for the 7-parameter Velasco-Fenton model, and 'fhn_lode' for Latent-
                            ODE FHN.
         t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
         ics (1d array): Initial conditions for the FHN equations.
@@ -56,11 +56,11 @@ class GenLibraryFit():
         elif fhn_variant == 'cardiac':
             self.fhn_name = 'cardiac'
             self.fhn_variant = self.fhn_c_td
-        elif fhn_variant == 'VF4':
-            self.fhn_name = 'VF4'
+        elif fhn_variant == 'vf4':
+            self.fhn_name = 'vf4'
             self.fhn_variant = self.fhn_vf_4_td
-        elif fhn_variant == 'VF7':
-            self.fhn_name = 'VF7'
+        elif fhn_variant == 'vf7':
+            self.fhn_name = 'vf7'
             self.fhn_variant = self.fhn_vf_7_td
         elif fhn_variant == 'standard_delayed_copy':
             self.fhn_name = 'standard_delayed_copy'
@@ -87,7 +87,7 @@ class GenLibraryFit():
             fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
             self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
         else:
-            # For non-delayed variants (i.e., 'standard' + 'cardiac' + 'VF4' + 'VF7'), use odeint
+            # For non-delayed variants (i.e., 'standard' + 'cardiac' + 'vf4' + 'vf7'), use odeint
             self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1)
             
 
@@ -119,8 +119,8 @@ class GenLibraryFit():
         variant_functions = {
             'standard': fhn,
             'cardiac': fhn_c,
-            'VF4': fhn_vf_4,
-            'VF7': fhn_vf_7,
+            'vf4': fhn_vf_4,
+            'vf7': fhn_vf_7,
             'fhn_lode': fhn,
         }
 

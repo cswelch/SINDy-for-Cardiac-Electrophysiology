@@ -96,7 +96,7 @@ Returns:
     None
 Params:
     model (ps.SINDy):   The SINDy model from which to extract the fit coefficients.
-    fhn_name (str):     The name of the FHN variant to use; 'standard', 'cardiac', 'VF4', 'VF7, and 'fhn_lode' are available options. Used to
+    fhn_name (str):     The name of the FHN variant to use; 'standard', 'cardiac', 'vf4', 'VF7, and 'fhn_lode' are available options. Used to
                         evaluate the exact coefficients.
     precision (int):    Exponent with base 10 of tolerance below which terms are considered zero. (E.g., 5 for 1e-5.)
 '''
@@ -171,7 +171,7 @@ Get the exact coefficients for the FHN equations using SymPy.
 Returns:
     (np.array): 2D array containing u' and v' coefficients, respectively.
 Params:
-    fhn_name (str):                 The name of the variant of the FHN equations to use; 'standard', 'cardiac', 'VF4', 'VF7, and 'fhn_lode' are available options.
+    fhn_name (str):                 The name of the variant of the FHN equations to use; 'standard', 'cardiac', 'vf4', 'VF7, and 'fhn_lode' are available options.
     monomial_names (list of str):   List of monomial names to use in the equations.
     params (dict):                  Optional dictionary of parameters to use for the FHN equations. If None, default parameters are used.
 '''
@@ -191,9 +191,9 @@ def get_fhn_exact_coeffs(fhn_name='standard', monomial_names = ['u', 'u**2', 'u*
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         elif fhn_name == 'cardiac':
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
-        elif fhn_name == 'VF4':
+        elif fhn_name == 'vf4':
             params = dict(alpha = 0.2, beta = 1.1, eps = 0.005, mu = 1.0)
-        elif fhn_name == 'VF7':
+        elif fhn_name == 'vf7':
             params = dict(alpha = 0.2, beta = 1.1, gamma = 0.31, delta = 0.0, eps = 0.005, theta = -0.05, mu = 1.0)
         elif fhn_name == 'fhn_lode':
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
@@ -208,10 +208,10 @@ def get_fhn_exact_coeffs(fhn_name='standard', monomial_names = ['u', 'u**2', 'u*
     elif fhn_name == 'cardiac':
         u_rhs = u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(params['beta']*u - params['gamma']*v - params['delta'])
-    elif fhn_name == 'VF4':
+    elif fhn_name == 'vf4':
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*(u*(params['beta']-u) - v)
-    elif fhn_name == 'VF7':
+    elif fhn_name == 'vf7':
         u_rhs = params['mu']*u*(1-u)*(u-params['alpha']) - u*v + f_td
         v_rhs = params['eps']*((params['beta']-u)*(u-params['gamma']) - params['delta']*v - params['theta'])
     elif fhn_name == 'fhn_lode':

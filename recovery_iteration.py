@@ -17,6 +17,14 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
     the next value, etc.
 '''
 
+# Parameter that tells rest of script which model we want to test.
+#   0 = FHN
+#   1 = FHN-c
+#   2 = VF4
+#   3 = VF7
+#   4 = FHN w/ pacedown
+model_idx = 3
+
 # Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
 # Params:
 #   t (1d array): Time input vector
@@ -25,6 +33,22 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
 #   mag (float): The magnitude of the stimulus
 def func_log(t):
     period=155.0
+    dur=5.0
+    mag=0.12
+
+    stimulus = mag * (np.mod(t, period) <= dur)
+    return stimulus
+
+def func_log_vf_4(t):
+    period=225.0
+    dur=5.0
+    mag=0.12
+
+    stimulus = mag * (np.mod(t, period) <= dur)
+    return stimulus
+
+def func_log_vf_7(t):
+    period=361.0
     dur=5.0
     mag=0.12
 
@@ -84,8 +108,47 @@ t_end_sim = 2000    # Upper bound of integration
 t_end_vis = 2000     # Upper bound of x-axis on plots
 n = int(t_end_sim / dt)   # Number of time steps
 t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
-x_0_vf_4 = np.array([0, 0.11])   # ICs; x_0_fhn = np.array([0, 0])
-states_fhn = odeint(fhn_c, x_0_vf_4, t_fhn, args=(func_log,), hmax=0.1) # Real n x 2 reference matrix of [u, v]
+
+# Models
+models = [fhn,
+          fhn_c,
+          fhn_vf_4,
+          fhn_vf_7,
+          fhn]
+
+# Their corresponding variant string names
+model_names = ['standard',
+               'cardiac',
+               'vf4',
+               'vf7',
+               'standard']
+
+# ICs
+x_0_fhn = np.array([-0.1,0])
+x_0_fhn_c = np.array([0, 0.11])
+x_0_vf_4 = np.array([0, 0.11])
+x_0_vf_7 = np.array([0, 0])
+ics = [x_0_fhn,
+       x_0_fhn_c,
+       x_0_vf_4,
+       x_0_vf_7,
+       x_0_fhn]
+
+# Stimulus functions
+funcs = [func_log,
+         func_log,
+         func_log_vf_4,
+         func_log_vf_7,
+         func_pacedown]
+
+# Plot colors
+colors = ['teal',
+          'red',
+          'blue',
+          'green',
+          'purple']
+
+states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
 # Start w/ initial recovery variable value
 v_old_est = 0
@@ -101,7 +164,7 @@ for i in range(n-1):
     def voltage_error(v_candidate):
         ics_cur = np.array([u_old, v_candidate])
         t_cur = np.array([t_old, t_new])
-        out = odeint(fhn_c, ics_cur, t_cur, args=(func_log,), hmax=0.1)
+        out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
         return out[1, 0] - u_new
 
     lower = v_old_est - 0.05
@@ -143,12 +206,12 @@ v_estimated = np.asarray(estimated_vs)
 assert len(t_fit) == len(u_fit) == len(v_estimated)
 
 gen_library_fhn = GenLibraryFit(
-    func_log,
-    func_log,
-    fhn_variant="standard",
+    funcs[model_idx],
+    funcs[model_idx],
+    fhn_variant=model_names[model_idx],
     t_range=t_fit,
-    ics=x_0_vf_4,
-    color="red",
+    ics=ics[model_idx],
+    color=colors[model_idx],
     optimizer=ps.SSR(alpha=0.5, normalize_columns=False) # ps.STLSQ(threshold=0.001, normalize_columns=True)
 )
 

@@ -7,6 +7,55 @@ import matplotlib.pyplot as plt
 from sklearn import metrics
 from scipy.signal import find_peaks
 
+from sklearn.base import BaseEstimator, clone
+
+
+class ExcludeLastFeaturesFromV(BaseEstimator):
+    '''
+    Fit each equation with an existing PySINDy optimizer.
+
+    The last n_excluded feature columns are unavailable to target 1 (v').
+    Targets 0 (u') and 2 (t') can use every column.
+    '''
+
+    def __init__(self, optimizer, n_excluded):
+        self.optimizer = optimizer
+        self.n_excluded = n_excluded
+
+    def fit(self, X, y, sample_weight=None):
+        X = np.asarray(X)
+        y = np.asarray(y)
+
+        if y.ndim != 2 or y.shape[1] != 3:
+            raise ValueError('Expected derivative targets [u\', v\', t\'].')
+        if not 0 < self.n_excluded < X.shape[1]:
+            raise ValueError('Invalid number of excluded feature columns.')
+
+        self.coef_ = np.zeros((3, X.shape[1]))
+        self.fitted_optimizers_ = []
+
+        for target in range(3):
+            # GeneralizedLibrary concatenates your u/v library first
+            # and your time library last.
+            keep = (
+                np.arange(X.shape[1] - self.n_excluded)
+                if target == 1
+                else np.arange(X.shape[1])
+            )
+
+            opt = clone(self.optimizer)
+            opt.fit(X[:, keep], y[:, target], sample_weight=sample_weight)
+
+            self.coef_[target, keep] = np.ravel(opt.coef_)
+            self.fitted_optimizers_.append(opt)
+
+        self.intercept_ = 0.0
+        return self
+
+    def predict(self, X):
+        return np.asarray(X) @ self.coef_.T
+    
+
 class GenLibraryFit():
     '''
     Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
@@ -212,6 +261,7 @@ class GenLibraryFit():
         return np.array([u_dot, v_dot])
         # return fhn_u_dot_copy(state, t, self.non_aut_term_data)
 
+
     '''
     Define delayed copy variant for auto-oscillatory case of FHN.
     '''
@@ -234,6 +284,7 @@ class GenLibraryFit():
         v_dot = u_dot_delayed
         
         return np.array([u_dot, v_dot])
+
 
     '''
     Return peak, activation, IBI, and APD90 measurements for a voltage trace.
@@ -278,6 +329,7 @@ class GenLibraryFit():
             'ibi': np.diff(t[peaks]),
             'apd90': np.asarray(apd90),
         }
+
 
     '''
     Print beat-level reconstruction statistics and return them as a dictionary.
@@ -343,6 +395,7 @@ class GenLibraryFit():
         print(f'Activation time MAE: {activation_time_mae:.{precision}e}')
         return statistics
 
+
     '''
     Reconstruct the system using the fitted SINDy model and plot the results.
     Params:
@@ -382,17 +435,16 @@ class GenLibraryFit():
             if (i == 1):
                 # ax[i].set_ylim(0.08, 0.185) # Set constant limits for v plot to maintain comparability
                 ax[i].legend() # Only add legend to the 2nd plot to save space
-            
 
 
     '''
     Fit the model using a GeneralizedLibrary with variable-specific libraries for u, v, and t.
     Params:
-        end_time: The rightmost time value shown on plots of the fit results.
+        end_time_vis: The rightmost time value shown on plots of the fit results.
     Returns:
         model_fhn_td (pysindy.SINDy): A fitted SINDy model with the specified non-autonomous term.
     '''
-    def fit(self, end_time=400):
+    def fit(self, end_time_vis=400):
         # Define variable-specific functions; functions of u and v are included in the first library, while the non-autonomous term is included in the second library. 
         # Note that the non-autonomous term is only applied to the u_dot equation.
         u_v_functions = [
@@ -433,18 +485,32 @@ class GenLibraryFit():
         ]
         gen_library = ps.GeneralizedLibrary([u_v_library, t_library], inputs_per_library=inputs_per_library)
 
+        # t_library has 1 unary function f_td applied to 1 listed input (in spite of the fact that inputs_per_library lists [2, 2, 2] for time, the 3
+        # copies are there simply to prevent a ragged array from being passed and don't actually do anything substantial).
+        n_forcing_columns = 1
+
         # Do the SINDy fit
         model_fhn_td = ps.SINDy(
-            feature_library=gen_library, 
-            optimizer=self.optimizer
+            feature_library=gen_library,
+            optimizer=ExcludeLastFeaturesFromV(
+                optimizer=self.optimizer,       # STLSQ, SSR, etc.
+                n_excluded=n_forcing_columns,
+            ),
         )
+
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=['u', 'v', 't'])
+
+        # Check the actual output order and the hard-zero restriction on the forcing term coefficient. 
+        names = model_fhn_td.get_feature_names()
+        assert len(names) == model_fhn_td.coefficients().shape[1]
+        assert np.all(model_fhn_td.coefficients()[1, -n_forcing_columns:] == 0)
+        print('Excluded from v\':', names[-n_forcing_columns:])
 
         # Create bar chart comparison between SINDy and exact coefficients
         compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
 
         # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
-        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0], end_time=end_time)
+        self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0], end_time=end_time_vis)
 
         return model_fhn_td
 

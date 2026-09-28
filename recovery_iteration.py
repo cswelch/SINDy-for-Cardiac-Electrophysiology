@@ -23,7 +23,7 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
 #   2 = VF4
 #   3 = VF7
 #   4 = FHN w/ pacedown
-model_idx = 3
+model_idx = 2
 
 # Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
 # Params:
@@ -222,6 +222,6 @@ gen_library_fhn.states_fhn_td = np.column_stack(
     (u_fit, v_estimated, t_fit)
 )
 
-gen_library_fhn.fit(end_time=t_end_vis)
+gen_library_fhn.fit(end_time_vis=t_end_vis)
 print('--------- SINDy fit finished. ---------')
 plt.show()

@@ -409,7 +409,8 @@ class GenLibraryFit():
     def reconstruct_and_plot(self, model, t, x_0, u, end_time, precision: int = 5):
         # Make the initial condition match the training data (2 components (u_0,v_0) --> 3 components (u_0,v_0,t_0))
         x_0 = np.concatenate((x_0, np.array([t[0]])))
-        model_reconstruction = model.simulate(x_0, t, integrator='odeint')
+        model_reconstruction = model.simulate(x_0, t, integrator='odeint', integrator_kws={'hmax': 0.1})
+
         mae_reconstruction = metrics.mean_absolute_error(model_reconstruction[:, 0], u) # Compute the mean absolute error between the model voltage and true voltage values.
         print(f'\n\nMean Absolute Error between reconstruction and true values: {mae_reconstruction:.{precision}e}')
         self.error_statistics = self._print_error_statistics(
@@ -679,7 +680,7 @@ class GenLibraryFit():
         t_emb = self.takens_t
 
         # TODO Play around with different integrator parameters to diagnose instability (fixed step size here, etc.)
-        Xsim = model.simulate(Xembedded[0], t_emb, integrator='odeint')
+        Xsim = model.simulate(Xembedded[0], t_emb, integrator='odeint', integrator_kws={'hmax': 0.1})
         # Xsim = model.simulate(Xembedded[0], 
         #                       t_emb, 
         #                       integrator = 'solve_ivp',

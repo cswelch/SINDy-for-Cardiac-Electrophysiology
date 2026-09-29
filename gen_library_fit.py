@@ -411,6 +411,15 @@ class GenLibraryFit():
         x_0 = np.concatenate((x_0, np.array([t[0]])))
         model_reconstruction = model.simulate(x_0, t, integrator='odeint', integrator_kws={'hmax': 0.1})
 
+        # ---------------- TODO Debugging to check whether simulated third variable (t) is actually same as time ----------------
+        print(
+            "Largest simulated clock error:",
+            np.max(np.abs(model_reconstruction[:, 2] - t))
+        )
+        for i in [0, len(t)//4, len(t)//2, -1]:
+            print(f"simulation time={t[i]:.3f}, simulated clock={model_reconstruction[i, 2]:.3f}")
+        # -----------------------------------------------------------------------------------------------------------------------
+
         mae_reconstruction = metrics.mean_absolute_error(model_reconstruction[:, 0], u) # Compute the mean absolute error between the model voltage and true voltage values.
         print(f'\n\nMean Absolute Error between reconstruction and true values: {mae_reconstruction:.{precision}e}')
         self.error_statistics = self._print_error_statistics(
@@ -500,6 +509,16 @@ class GenLibraryFit():
         )
 
         model_fhn_td.fit(self.states_fhn_td, t=self.t_fhn_td, feature_names=['u', 'v', 't'])
+
+        # ---------------- TODO Debugging to check whether simulated third variable (t) is actually same as time ----------------
+        model_fhn_td.print(precision=9)  # Include the t' equation
+
+        # Evaluate the learned clock rate on the *known* trajectory.
+        clock_rate = model_fhn_td.predict(self.states_fhn_td)[:, 2]
+        print("Clock-rate range:", clock_rate.min(), clock_rate.max())
+        print("Largest |t' - 1|:", np.max(np.abs(clock_rate - 1.0)))
+        # -----------------------------------------------------------------------------------------------------------------------
+
 
         # Check the actual output order and the hard-zero restriction on the forcing term coefficient. 
         names = model_fhn_td.get_feature_names()

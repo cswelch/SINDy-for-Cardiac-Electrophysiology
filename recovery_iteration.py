@@ -23,7 +23,7 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
 #   2 = VF4
 #   3 = VF7
 #   4 = FHN w/ pacedown
-model_idx = 2
+model_idx = 1
 
 # Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
 # Params:
@@ -150,22 +150,28 @@ colors = ['teal',
 
 states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
+# Infer the recovery value by solving for the value that reproduces u_new.
+def voltage_error(v_candidate):
+    ics_cur = np.array([u_old, v_candidate])
+    t_cur = np.array([t_old, t_new])
+    out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
+    return out[1, 0] - u_new
+
+
 # Start w/ initial recovery variable value
 v_old_est = 0
 estimated_vs = []
 for i in range(n-1):
+    if (i == 3098):
+        print('*** Entering spike region ***')
+    elif (i == 3102):
+        print('*** Exiting spike region ***')
+
     t_old = dt * i
     t_new = dt * (i+1)
 
     u_old = states_fhn[i, 0]
     u_new = states_fhn[i+1, 0]
-
-    # Infer the recovery value by solving for the value that reproduces u_new.
-    def voltage_error(v_candidate):
-        ics_cur = np.array([u_old, v_candidate])
-        t_cur = np.array([t_old, t_new])
-        out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
-        return out[1, 0] - u_new
 
     lower = v_old_est - 0.05
     upper = v_old_est + 0.05
@@ -173,9 +179,14 @@ for i in range(n-1):
         lower -= 0.05
         upper += 0.05
 
-    v_old_est = cast(float, brentq(voltage_error, lower, upper, rtol=root_find_rel_tol))
+    # TODO Replace v estimate with true value at problematic stimulus time for testing purposes
+    if ( (i-3099) % 3100 == 0 ):
+        v_old_est = states_fhn[i, 1]
+    else:
+        v_old_est = cast(float, brentq(voltage_error, lower, upper, rtol=root_find_rel_tol))
 
     estimated_vs.append(v_old_est)
+
 
 print('Length of t_fhn: ', len(t_fhn))
 print('Length of estimated_vs: ', len(estimated_vs))

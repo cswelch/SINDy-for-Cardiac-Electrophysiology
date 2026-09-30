@@ -24,6 +24,14 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
 #   3 = VF7
 #   4 = FHN w/ pacedown
 model_idx = 1
+stim_mag = 0.12
+
+dt = 0.01    # Time step
+root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
+t_end_sim = 2000    # Upper bound of integration
+t_end_vis = 2000     # Upper bound of x-axis on plots
+n = int(t_end_sim / dt)   # Number of time steps
+t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
 
 # Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
 # Params:
@@ -34,7 +42,7 @@ model_idx = 1
 def func_log(t):
     period=155.0
     dur=5.0
-    mag=0.12
+    mag=stim_mag
 
     stimulus = mag * (np.mod(t, period) <= dur)
     return stimulus
@@ -42,7 +50,7 @@ def func_log(t):
 def func_log_vf_4(t):
     period=225.0
     dur=5.0
-    mag=0.12
+    mag=stim_mag
 
     stimulus = mag * (np.mod(t, period) <= dur)
     return stimulus
@@ -50,7 +58,7 @@ def func_log_vf_4(t):
 def func_log_vf_7(t):
     period=361.0
     dur=5.0
-    mag=0.12
+    mag=stim_mag
 
     stimulus = mag * (np.mod(t, period) <= dur)
     return stimulus
@@ -102,13 +110,6 @@ def func_pacedown(t):
     stimulus = mag * is_stim
     return stimulus
 
-dt = 0.05    # Time step
-root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
-t_end_sim = 2000    # Upper bound of integration
-t_end_vis = 2000     # Upper bound of x-axis on plots
-n = int(t_end_sim / dt)   # Number of time steps
-t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
-
 # Models
 models = [fhn,
           fhn_c,
@@ -158,14 +159,20 @@ def voltage_error(v_candidate):
     return out[1, 0] - u_new
 
 
+# Catch where stimulus jumps occur and save them; only consider the leading edge since that's where problems happen.  We don't need to worry about t=0 since
+# it is the starting value of the time series, so no jump from 0 -> stim_mag occurs on its leading edge.
+stim_leading_edge_mask = ( funcs[model_idx](t_fhn) < stim_mag / 2 ) & ( funcs[model_idx](t_fhn + dt) > stim_mag / 2 )
+stim_times = t_fhn[stim_leading_edge_mask]
+
 # Start w/ initial recovery variable value
 v_old_est = 0
 estimated_vs = []
+print('------------------ Reconstructing recovery variable... -------------------')
 for i in range(n-1):
-    if (i == 3098):
-        print('*** Entering spike region ***')
-    elif (i == 3102):
-        print('*** Exiting spike region ***')
+    # if (i == 3098):
+    #     print('*** Entering spike region ***')
+    # elif (i == 3102):
+    #     print('*** Exiting spike region ***')
 
     t_old = dt * i
     t_new = dt * (i+1)
@@ -179,9 +186,9 @@ for i in range(n-1):
         lower -= 0.05
         upper += 0.05
 
-    # TODO Replace v estimate with true value at problematic stimulus time for testing purposes
-    if ( (i-3099) % 3100 == 0 ):
-        v_old_est = states_fhn[i, 1]
+    # Just use the last step's recovery variable value if at the leading edge of a stimulus pulse to prevent poor estimates.
+    if (t_old in stim_times):
+        v_old_est = estimated_vs[-1]
     else:
         v_old_est = cast(float, brentq(voltage_error, lower, upper, rtol=root_find_rel_tol))
 
@@ -190,6 +197,7 @@ for i in range(n-1):
 
 print('Length of t_fhn: ', len(t_fhn))
 print('Length of estimated_vs: ', len(estimated_vs))
+print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
 
 # plt.figure()
 # plt.plot(t_fhn, states_fhn[:, 0])
@@ -234,5 +242,5 @@ gen_library_fhn.states_fhn_td = np.column_stack(
 )
 
 gen_library_fhn.fit(end_time_vis=t_end_vis)
-print('--------- SINDy fit finished. ---------')
+print('-------------------------- SINDy fit finished. --------------------------- \n\n')
 plt.show()

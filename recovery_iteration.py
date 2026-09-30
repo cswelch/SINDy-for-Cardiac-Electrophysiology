@@ -23,7 +23,7 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
 #   2 = VF4
 #   3 = VF7
 #   4 = FHN w/ pacedown
-model_idx = 1
+model_idx = 3
 stim_mag = 0.12
 
 dt = 0.01    # Time step
@@ -199,22 +199,22 @@ print('Length of t_fhn: ', len(t_fhn))
 print('Length of estimated_vs: ', len(estimated_vs))
 print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
 
-# plt.figure()
-# plt.plot(t_fhn, states_fhn[:, 0])
-# plt.title('Measured Voltages')
-# plt.xlabel('t (arbitrary units)')
-# plt.xlim(0, t_end_vis)
-# plt.ylabel('u (V)')
+plt.figure()
+plt.plot(t_fhn, states_fhn[:, 0])
+plt.title('Measured Voltages')
+plt.xlabel('t (arbitrary units)')
+plt.xlim(0, t_end_vis)
+plt.ylabel('u (V)')
 
-# plt.figure()
-# plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
-# plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
-# plt.title('Estimated vs. True Recovery Variable Values')
-# plt.xlabel('t (arbitrary units)')
-# plt.xlim(0, t_end_vis)
-# plt.ylabel('v (recovery units)')
-# plt.legend()
-# plt.show()
+plt.figure()
+plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
+plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
+plt.title('Estimated vs. True Recovery Variable Values')
+plt.xlabel('t (arbitrary units)')
+plt.xlim(0, t_end_vis)
+plt.ylabel('v (recovery units)')
+plt.legend()
+plt.show()
 
 # ------------------------------ Do the SINDy fit ------------------------------
 print('--------- Starting SINDy fit with estimated recovery variable... ---------')

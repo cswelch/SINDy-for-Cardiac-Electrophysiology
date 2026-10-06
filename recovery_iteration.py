@@ -151,8 +151,9 @@ colors = ['teal',
 
 states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
-# Infer the recovery value by solving for the value that reproduces u_new.
-def voltage_error(v_candidate):
+# Infer the error between the estimated (out[1, 0]) and true voltage (u_new) under the assumption of v_candidate as the recovery variable estimate at the
+# last time step.
+def voltage_error(v_candidate, u_old, u_new, t_old, t_new):
     ics_cur = np.array([u_old, v_candidate])
     t_cur = np.array([t_old, t_new])
     out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
@@ -182,7 +183,7 @@ for i in range(n-1):
 
     lower = v_old_est - 0.05
     upper = v_old_est + 0.05
-    while voltage_error(lower) * voltage_error(upper) > 0:
+    while voltage_error(lower, u_old, u_new, t_old, t_new) * voltage_error(upper, u_old, u_new, t_old, t_new) > 0:
         lower -= 0.05
         upper += 0.05
 

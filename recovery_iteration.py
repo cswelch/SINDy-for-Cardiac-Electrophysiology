@@ -1,6 +1,7 @@
 import numpy as np
 import pysindy as ps
 import matplotlib.pyplot as plt
+import functools
 from typing import cast
 
 from scipy.integrate import odeint
@@ -23,7 +24,10 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
 #   2 = VF4
 #   3 = VF7
 #   4 = FHN w/ pacedown
-model_idx = 3
+#   5 = FHN-c w/ pacedown
+#   6 = VF4 w/ pacedown
+#   7 = VF7 w/ pacedown
+model_idx = 5
 stim_mag = 0.12
 
 dt = 0.01    # Time step
@@ -110,19 +114,72 @@ def func_pacedown(t):
     stimulus = mag * is_stim
     return stimulus
 
+'''
+    Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period, with larger periods for the VF7 model.
+    Params:
+        t (array): Time values
+        dur (float): Duration of each pulse
+        mag (float): Magnitude of the stimulus
+        stim_count (int): Number of stimuli of each period to generate
+        periods (array): Array of periods for each set of pulses
+'''
+def func_pacedown_vf_7(t):
+    dur=5.0
+    mag=0.12
+    stim_count=3
+    periods = np.array([610., 460., 310.])
+    
+    period_0_multiple = np.minimum(np.floor(t / periods[0]), stim_count)
+    period_1_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0]) / periods[1]), stim_count)
+    period_2_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0] - period_1_multiple * periods[1]) / periods[2]), stim_count)
+
+    local_t_0 = t
+    local_t_1 = t - stim_count * periods[0]
+    local_t_2 = t - stim_count * periods[0] - stim_count * periods[1]
+
+    is_stim = np.zeros_like(t, dtype=bool)
+
+    mask_0 = period_0_multiple < stim_count
+    mask_1 = (~mask_0) & (period_1_multiple < stim_count)
+    mask_2 = (~mask_0) & (~mask_1) & (period_2_multiple < stim_count)
+
+    stim_0 = np.mod(local_t_0, periods[0]) <= dur
+    stim_1 = np.mod(local_t_1, periods[1]) <= dur
+    stim_2 = np.mod(local_t_2, periods[2]) <= dur
+
+    # Use np.where to allow both scalar and array t to work.
+    is_stim = np.where(
+        mask_0,
+        stim_0,
+        np.where(mask_1,
+                 stim_1,
+                 np.where(mask_2,
+                          stim_2,
+                          False))
+    )
+
+    stimulus = mag * is_stim
+    return stimulus
+
 # Models
 models = [fhn,
           fhn_c,
           fhn_vf_4,
           fhn_vf_7,
-          fhn]
+          fhn,
+          fhn_c,
+          fhn_vf_4,
+          fhn_vf_7]
 
 # Their corresponding variant string names
 model_names = ['standard',
                'cardiac',
                'vf4',
                'vf7',
-               'standard']
+               'standard',
+               'cardiac',
+                'vf4',
+                'vf7']
 
 # ICs
 x_0_fhn = np.array([-0.1,0])
@@ -133,21 +190,31 @@ ics = [x_0_fhn,
        x_0_fhn_c,
        x_0_vf_4,
        x_0_vf_7,
-       x_0_fhn]
+       x_0_fhn,
+       x_0_fhn_c,
+       x_0_vf_4,
+       x_0_vf_7]
 
+# TODO Using longer periods for VF7 due to nature of model. How about for FHN-c + VF4?
 # Stimulus functions
 funcs = [func_log,
          func_log,
          func_log_vf_4,
          func_log_vf_7,
-         func_pacedown]
+         func_pacedown,
+         func_pacedown,
+         func_pacedown,
+         func_pacedown_vf_7]
 
 # Plot colors
 colors = ['teal',
           'red',
           'blue',
           'green',
-          'purple']
+          'purple',
+          'red',
+          'blue',
+          'green']
 
 states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
@@ -191,7 +258,7 @@ for i in range(n-1):
     if (t_old in stim_times):
         v_old_est = estimated_vs[-1]
     else:
-        v_old_est = cast(float, brentq(voltage_error, lower, upper, rtol=root_find_rel_tol))
+        v_old_est = cast(float, brentq(functools.partial(voltage_error, u_old=u_old, u_new=u_new, t_old=t_old, t_new=t_new), lower, upper, rtol=root_find_rel_tol))    # TODO
 
     estimated_vs.append(v_old_est)
 
@@ -200,22 +267,22 @@ print('Length of t_fhn: ', len(t_fhn))
 print('Length of estimated_vs: ', len(estimated_vs))
 print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
 
-plt.figure()
-plt.plot(t_fhn, states_fhn[:, 0])
-plt.title('Measured Voltages')
-plt.xlabel('t (arbitrary units)')
-plt.xlim(0, t_end_vis)
-plt.ylabel('u (V)')
+# plt.figure()
+# plt.plot(t_fhn, states_fhn[:, 0])
+# plt.title('Measured Voltages')
+# plt.xlabel('t (arbitrary units)')
+# plt.xlim(0, t_end_vis)
+# plt.ylabel('u (V)')
 
-plt.figure()
-plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
-plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
-plt.title('Estimated vs. True Recovery Variable Values')
-plt.xlabel('t (arbitrary units)')
-plt.xlim(0, t_end_vis)
-plt.ylabel('v (recovery units)')
-plt.legend()
-plt.show()
+# plt.figure()
+# plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
+# plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
+# plt.title('Estimated vs. True Recovery Variable Values')
+# plt.xlabel('t (arbitrary units)')
+# plt.xlim(0, t_end_vis)
+# plt.ylabel('v (recovery units)')
+# plt.legend()
+# plt.show()
 
 # ------------------------------ Do the SINDy fit ------------------------------
 print('--------- Starting SINDy fit with estimated recovery variable... ---------')

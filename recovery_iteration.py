@@ -9,6 +9,9 @@ from scipy.optimize import brentq
 from gen_library_fit import GenLibraryFit
 from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs
 
+import threading
+import time
+
 '''
     Proposed variant of partially observed SINDy where voltage is known but recovery is unknown.
     
@@ -18,297 +21,325 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_c
     the next value, etc.
 '''
 
-# Parameter that tells rest of script which model we want to test.
-#   0 = FHN
-#   1 = FHN-c
-#   2 = VF4
-#   3 = VF7
-#   4 = FHN w/ pacedown
-#   5 = FHN-c w/ pacedown
-#   6 = VF4 w/ pacedown
-#   7 = VF7 w/ pacedown
-model_idx = 5
-stim_mag = 0.12
+# Monitoring to keep track of time elapsed.
+def show_timer(start, stop):
+    while not stop.is_set():
+        elapsed = time.perf_counter() - start
+        print(f"\rElapsed: {elapsed:,.1f} seconds", end="", flush=True)
+        stop.wait(0.1)
 
-dt = 0.01    # Time step
-root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
-t_end_sim = 2000    # Upper bound of integration
-t_end_vis = 2000     # Upper bound of x-axis on plots
-n = int(t_end_sim / dt)   # Number of time steps
-t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
 
-# Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
-# Params:
-#   t (1d array): Time input vector
-#   period (float): The period of the stimulus
-#   dur (float): The time duration of the stimulus
-#   mag (float): The magnitude of the stimulus
-def func_log(t):
-    period=155.0
-    dur=5.0
-    mag=stim_mag
+start = time.perf_counter()
+stop = threading.Event()
 
-    stimulus = mag * (np.mod(t, period) <= dur)
-    return stimulus
+timer = threading.Thread(
+    target=show_timer,
+    args=(start, stop),
+    daemon=True,
+)
+timer.start()
 
-def func_log_vf_4(t):
-    period=225.0
-    dur=5.0
-    mag=stim_mag
 
-    stimulus = mag * (np.mod(t, period) <= dur)
-    return stimulus
+try:
+    # Parameter that tells rest of script which model we want to test.
+    #   0 = FHN
+    #   1 = FHN-c
+    #   2 = VF4
+    #   3 = VF7
+    #   4 = FHN w/ pacedown
+    #   5 = FHN-c w/ pacedown
+    #   6 = VF4 w/ pacedown
+    #   7 = VF7 w/ pacedown
+    model_idx = 5
+    stim_mag = 0.12
 
-def func_log_vf_7(t):
-    period=361.0
-    dur=5.0
-    mag=stim_mag
+    dt = 0.05    # Time step
+    root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
+    t_end_sim = 1000    # Upper bound of integration
+    t_end_vis = 1000     # Upper bound of x-axis on plots
+    n = int(t_end_sim / dt)   # Number of time steps
+    t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
 
-    stimulus = mag * (np.mod(t, period) <= dur)
-    return stimulus
+    # Logical step function non-autonomous term; note that this must have ONLY one argument for PySINDy to handle it properly.
+    # Params:
+    #   t (1d array): Time input vector
+    #   period (float): The period of the stimulus
+    #   dur (float): The time duration of the stimulus
+    #   mag (float): The magnitude of the stimulus
+    def func_log(t):
+        period=155.0
+        dur=5.0
+        mag=stim_mag
 
-'''
-    Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period.
-    Params:
-        t (array): Time values
-        dur (float): Duration of each pulse
-        mag (float): Magnitude of the stimulus
-        stim_count (int): Number of stimuli of each period to generate
-        periods (array): Array of periods for each set of pulses
-'''
-def func_pacedown(t):
-    dur=5.0
-    mag=0.12
-    stim_count=3
-    periods = np.array([305., 230., 155.])
-    
-    period_0_multiple = np.minimum(np.floor(t / periods[0]), stim_count)
-    period_1_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0]) / periods[1]), stim_count)
-    period_2_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0] - period_1_multiple * periods[1]) / periods[2]), stim_count)
+        stimulus = mag * (np.mod(t, period) <= dur)
+        return stimulus
 
-    local_t_0 = t
-    local_t_1 = t - stim_count * periods[0]
-    local_t_2 = t - stim_count * periods[0] - stim_count * periods[1]
+    def func_log_vf_4(t):
+        period=225.0
+        dur=5.0
+        mag=stim_mag
 
-    is_stim = np.zeros_like(t, dtype=bool)
+        stimulus = mag * (np.mod(t, period) <= dur)
+        return stimulus
 
-    mask_0 = period_0_multiple < stim_count
-    mask_1 = (~mask_0) & (period_1_multiple < stim_count)
-    mask_2 = (~mask_0) & (~mask_1) & (period_2_multiple < stim_count)
+    def func_log_vf_7(t):
+        period=361.0
+        dur=5.0
+        mag=stim_mag
 
-    stim_0 = np.mod(local_t_0, periods[0]) <= dur
-    stim_1 = np.mod(local_t_1, periods[1]) <= dur
-    stim_2 = np.mod(local_t_2, periods[2]) <= dur
+        stimulus = mag * (np.mod(t, period) <= dur)
+        return stimulus
 
-    # Use np.where to allow both scalar and array t to work.
-    is_stim = np.where(
-        mask_0,
-        stim_0,
-        np.where(mask_1,
-                 stim_1,
-                 np.where(mask_2,
-                          stim_2,
-                          False))
-    )
+    '''
+        Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period.
+        Params:
+            t (array): Time values
+            dur (float): Duration of each pulse
+            mag (float): Magnitude of the stimulus
+            stim_count (int): Number of stimuli of each period to generate
+            periods (array): Array of periods for each set of pulses
+    '''
+    def func_pacedown(t):
+        dur=5.0
+        mag=0.12
+        stim_count=3
+        periods = np.array([305., 230., 155.])
+        
+        period_0_multiple = np.minimum(np.floor(t / periods[0]), stim_count)
+        period_1_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0]) / periods[1]), stim_count)
+        period_2_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0] - period_1_multiple * periods[1]) / periods[2]), stim_count)
 
-    stimulus = mag * is_stim
-    return stimulus
+        local_t_0 = t
+        local_t_1 = t - stim_count * periods[0]
+        local_t_2 = t - stim_count * periods[0] - stim_count * periods[1]
 
-'''
-    Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period, with larger periods for the VF7 model.
-    Params:
-        t (array): Time values
-        dur (float): Duration of each pulse
-        mag (float): Magnitude of the stimulus
-        stim_count (int): Number of stimuli of each period to generate
-        periods (array): Array of periods for each set of pulses
-'''
-def func_pacedown_vf_7(t):
-    dur=5.0
-    mag=0.12
-    stim_count=3
-    periods = np.array([610., 460., 310.])
-    
-    period_0_multiple = np.minimum(np.floor(t / periods[0]), stim_count)
-    period_1_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0]) / periods[1]), stim_count)
-    period_2_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0] - period_1_multiple * periods[1]) / periods[2]), stim_count)
+        is_stim = np.zeros_like(t, dtype=bool)
 
-    local_t_0 = t
-    local_t_1 = t - stim_count * periods[0]
-    local_t_2 = t - stim_count * periods[0] - stim_count * periods[1]
+        mask_0 = period_0_multiple < stim_count
+        mask_1 = (~mask_0) & (period_1_multiple < stim_count)
+        mask_2 = (~mask_0) & (~mask_1) & (period_2_multiple < stim_count)
 
-    is_stim = np.zeros_like(t, dtype=bool)
+        stim_0 = np.mod(local_t_0, periods[0]) <= dur
+        stim_1 = np.mod(local_t_1, periods[1]) <= dur
+        stim_2 = np.mod(local_t_2, periods[2]) <= dur
 
-    mask_0 = period_0_multiple < stim_count
-    mask_1 = (~mask_0) & (period_1_multiple < stim_count)
-    mask_2 = (~mask_0) & (~mask_1) & (period_2_multiple < stim_count)
+        # Use np.where to allow both scalar and array t to work.
+        is_stim = np.where(
+            mask_0,
+            stim_0,
+            np.where(mask_1,
+                    stim_1,
+                    np.where(mask_2,
+                            stim_2,
+                            False))
+        )
 
-    stim_0 = np.mod(local_t_0, periods[0]) <= dur
-    stim_1 = np.mod(local_t_1, periods[1]) <= dur
-    stim_2 = np.mod(local_t_2, periods[2]) <= dur
+        stimulus = mag * is_stim
+        return stimulus
 
-    # Use np.where to allow both scalar and array t to work.
-    is_stim = np.where(
-        mask_0,
-        stim_0,
-        np.where(mask_1,
-                 stim_1,
-                 np.where(mask_2,
-                          stim_2,
-                          False))
-    )
+    '''
+        Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period, with larger periods for the VF7 model.
+        Params:
+            t (array): Time values
+            dur (float): Duration of each pulse
+            mag (float): Magnitude of the stimulus
+            stim_count (int): Number of stimuli of each period to generate
+            periods (array): Array of periods for each set of pulses
+    '''
+    def func_pacedown_vf_7(t):
+        dur=5.0
+        mag=0.12
+        stim_count=3
+        periods = np.array([610., 460., 310.])
+        
+        period_0_multiple = np.minimum(np.floor(t / periods[0]), stim_count)
+        period_1_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0]) / periods[1]), stim_count)
+        period_2_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0] - period_1_multiple * periods[1]) / periods[2]), stim_count)
 
-    stimulus = mag * is_stim
-    return stimulus
+        local_t_0 = t
+        local_t_1 = t - stim_count * periods[0]
+        local_t_2 = t - stim_count * periods[0] - stim_count * periods[1]
 
-# Models
-models = [fhn,
-          fhn_c,
-          fhn_vf_4,
-          fhn_vf_7,
-          fhn,
-          fhn_c,
-          fhn_vf_4,
-          fhn_vf_7]
+        is_stim = np.zeros_like(t, dtype=bool)
 
-# Their corresponding variant string names
-model_names = ['standard',
-               'cardiac',
-               'vf4',
-               'vf7',
-               'standard',
-               'cardiac',
+        mask_0 = period_0_multiple < stim_count
+        mask_1 = (~mask_0) & (period_1_multiple < stim_count)
+        mask_2 = (~mask_0) & (~mask_1) & (period_2_multiple < stim_count)
+
+        stim_0 = np.mod(local_t_0, periods[0]) <= dur
+        stim_1 = np.mod(local_t_1, periods[1]) <= dur
+        stim_2 = np.mod(local_t_2, periods[2]) <= dur
+
+        # Use np.where to allow both scalar and array t to work.
+        is_stim = np.where(
+            mask_0,
+            stim_0,
+            np.where(mask_1,
+                    stim_1,
+                    np.where(mask_2,
+                            stim_2,
+                            False))
+        )
+
+        stimulus = mag * is_stim
+        return stimulus
+
+    # Models
+    models = [fhn,
+            fhn_c,
+            fhn_vf_4,
+            fhn_vf_7,
+            fhn,
+            fhn_c,
+            fhn_vf_4,
+            fhn_vf_7]
+
+    # Their corresponding variant string names
+    model_names = ['standard',
+                'cardiac',
                 'vf4',
-                'vf7']
+                'vf7',
+                'standard',
+                'cardiac',
+                    'vf4',
+                    'vf7']
 
-# ICs
-x_0_fhn = np.array([-0.1,0])
-x_0_fhn_c = np.array([0, 0.11])
-x_0_vf_4 = np.array([0, 0.11])
-x_0_vf_7 = np.array([0, 0])
-ics = [x_0_fhn,
-       x_0_fhn_c,
-       x_0_vf_4,
-       x_0_vf_7,
-       x_0_fhn,
-       x_0_fhn_c,
-       x_0_vf_4,
-       x_0_vf_7]
+    # ICs
+    x_0_fhn = np.array([-0.1,0])
+    x_0_fhn_c = np.array([0, 0.11])
+    x_0_vf_4 = np.array([0, 0.11])
+    x_0_vf_7 = np.array([0, 0])
+    ics = [x_0_fhn,
+        x_0_fhn_c,
+        x_0_vf_4,
+        x_0_vf_7,
+        x_0_fhn,
+        x_0_fhn_c,
+        x_0_vf_4,
+        x_0_vf_7]
 
-# TODO Using longer periods for VF7 due to nature of model. How about for FHN-c + VF4?
-# Stimulus functions
-funcs = [func_log,
-         func_log,
-         func_log_vf_4,
-         func_log_vf_7,
-         func_pacedown,
-         func_pacedown,
-         func_pacedown,
-         func_pacedown_vf_7]
+    # TODO Using longer periods for VF7 due to nature of model. How about for FHN-c + VF4?
+    # Stimulus functions
+    funcs = [func_log,
+            func_log,
+            func_log_vf_4,
+            func_log_vf_7,
+            func_pacedown,
+            func_pacedown,
+            func_pacedown,
+            func_pacedown_vf_7]
 
-# Plot colors
-colors = ['teal',
-          'red',
-          'blue',
-          'green',
-          'purple',
-          'red',
-          'blue',
-          'green']
+    # Plot colors
+    colors = ['teal',
+            'red',
+            'blue',
+            'green',
+            'purple',
+            'red',
+            'blue',
+            'green']
 
-states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
+    states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
-# Infer the error between the estimated (out[1, 0]) and true voltage (u_new) under the assumption of v_candidate as the recovery variable estimate at the
-# last time step.
-def voltage_error(v_candidate, u_old, u_new, t_old, t_new):
-    ics_cur = np.array([u_old, v_candidate])
-    t_cur = np.array([t_old, t_new])
-    out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
-    return out[1, 0] - u_new
-
-
-# Catch where stimulus jumps occur and save them; only consider the leading edge since that's where problems happen.  We don't need to worry about t=0 since
-# it is the starting value of the time series, so no jump from 0 -> stim_mag occurs on its leading edge.
-stim_leading_edge_mask = ( funcs[model_idx](t_fhn) < stim_mag / 2 ) & ( funcs[model_idx](t_fhn + dt) > stim_mag / 2 )
-stim_times = t_fhn[stim_leading_edge_mask]
-
-# Start w/ initial recovery variable value
-v_old_est = 0
-estimated_vs = []
-print('------------------ Reconstructing recovery variable... -------------------')
-for i in range(n-1):
-    # if (i == 3098):
-    #     print('*** Entering spike region ***')
-    # elif (i == 3102):
-    #     print('*** Exiting spike region ***')
-
-    t_old = dt * i
-    t_new = dt * (i+1)
-
-    u_old = states_fhn[i, 0]
-    u_new = states_fhn[i+1, 0]
-
-    lower = v_old_est - 0.05
-    upper = v_old_est + 0.05
-    while voltage_error(lower, u_old, u_new, t_old, t_new) * voltage_error(upper, u_old, u_new, t_old, t_new) > 0:
-        lower -= 0.05
-        upper += 0.05
-
-    # Just use the last step's recovery variable value if at the leading edge of a stimulus pulse to prevent poor estimates.
-    if (t_old in stim_times):
-        v_old_est = estimated_vs[-1]
-    else:
-        v_old_est = cast(float, brentq(functools.partial(voltage_error, u_old=u_old, u_new=u_new, t_old=t_old, t_new=t_new), lower, upper, rtol=root_find_rel_tol))    # TODO
-
-    estimated_vs.append(v_old_est)
+    # Infer the error between the estimated (out[1, 0]) and true voltage (u_new) under the assumption of v_candidate as the recovery variable estimate at the
+    # last time step.
+    def voltage_error(v_candidate, u_old, u_new, t_old, t_new):
+        ics_cur = np.array([u_old, v_candidate])
+        t_cur = np.array([t_old, t_new])
+        out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
+        return out[1, 0] - u_new
 
 
-print('Length of t_fhn: ', len(t_fhn))
-print('Length of estimated_vs: ', len(estimated_vs))
-print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
+    # Catch where stimulus jumps occur and save them; only consider the leading edge since that's where problems happen.  We don't need to worry about t=0 since
+    # it is the starting value of the time series, so no jump from 0 -> stim_mag occurs on its leading edge.
+    stim_leading_edge_mask = ( funcs[model_idx](t_fhn) < stim_mag / 2 ) & ( funcs[model_idx](t_fhn + dt) > stim_mag / 2 )
+    stim_times = t_fhn[stim_leading_edge_mask]
 
-# plt.figure()
-# plt.plot(t_fhn, states_fhn[:, 0])
-# plt.title('Measured Voltages')
-# plt.xlabel('t (arbitrary units)')
-# plt.xlim(0, t_end_vis)
-# plt.ylabel('u (V)')
+    # Start w/ initial recovery variable value
+    v_old_est = 0
+    estimated_vs = []
+    print('------------------ Reconstructing recovery variable... -------------------')
+    for i in range(n-1):
+        # if (i == 3098):
+        #     print('*** Entering spike region ***')
+        # elif (i == 3102):
+        #     print('*** Exiting spike region ***')
 
-# plt.figure()
-# plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
-# plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
-# plt.title('Estimated vs. True Recovery Variable Values')
-# plt.xlabel('t (arbitrary units)')
-# plt.xlim(0, t_end_vis)
-# plt.ylabel('v (recovery units)')
-# plt.legend()
-# plt.show()
+        t_old = dt * i
+        t_new = dt * (i+1)
 
-# ------------------------------ Do the SINDy fit ------------------------------
-print('--------- Starting SINDy fit with estimated recovery variable... ---------')
-t_fit = t_fhn[:-1]
-u_fit = states_fhn[:-1, 0]
-v_estimated = np.asarray(estimated_vs)
+        u_old = states_fhn[i, 0]
+        u_new = states_fhn[i+1, 0]
 
-assert len(t_fit) == len(u_fit) == len(v_estimated)
+        lower = v_old_est - 0.05
+        upper = v_old_est + 0.05
+        while voltage_error(lower, u_old, u_new, t_old, t_new) * voltage_error(upper, u_old, u_new, t_old, t_new) > 0:
+            lower -= 0.05
+            upper += 0.05
 
-gen_library_fhn = GenLibraryFit(
-    funcs[model_idx],
-    funcs[model_idx],
-    fhn_variant=model_names[model_idx],
-    t_range=t_fit,
-    ics=ics[model_idx],
-    color=colors[model_idx],
-    optimizer=ps.SSR(alpha=0.5, normalize_columns=False) # ps.STLSQ(threshold=0.001, normalize_columns=True)
-)
+        # Just use the last step's recovery variable value if at the leading edge of a stimulus pulse to prevent poor estimates.
+        if (t_old in stim_times):
+            v_old_est = estimated_vs[-1]
+        else:
+            v_old_est = cast(float, brentq(functools.partial(voltage_error, u_old=u_old, u_new=u_new, t_old=t_old, t_new=t_new), lower, upper, rtol=root_find_rel_tol))    # TODO
 
-# Replace simulated recovery data with estimated recovery data.
-gen_library_fhn.t_fhn_td = t_fit
-gen_library_fhn.dt = t_fit[1] - t_fit[0]
-gen_library_fhn.states_fhn_td = np.column_stack(
-    (u_fit, v_estimated, t_fit)
-)
+        estimated_vs.append(v_old_est)
 
-gen_library_fhn.fit(end_time_vis=t_end_vis)
-print('-------------------------- SINDy fit finished. --------------------------- \n\n')
-plt.show()
+
+    print('Length of t_fhn: ', len(t_fhn))
+    print('Length of estimated_vs: ', len(estimated_vs))
+    print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
+
+    # plt.figure()
+    # plt.plot(t_fhn, states_fhn[:, 0])
+    # plt.title('Measured Voltages')
+    # plt.xlabel('t (arbitrary units)')
+    # plt.xlim(0, t_end_vis)
+    # plt.ylabel('u (V)')
+
+    # plt.figure()
+    # plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
+    # plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
+    # plt.title('Estimated vs. True Recovery Variable Values')
+    # plt.xlabel('t (arbitrary units)')
+    # plt.xlim(0, t_end_vis)
+    # plt.ylabel('v (recovery units)')
+    # plt.legend()
+    # plt.show()
+
+    # ------------------------------ Do the SINDy fit ------------------------------
+    print('--------- Starting SINDy fit with estimated recovery variable... ---------')
+    t_fit = t_fhn[:-1]
+    u_fit = states_fhn[:-1, 0]
+    v_estimated = np.asarray(estimated_vs)
+
+    assert len(t_fit) == len(u_fit) == len(v_estimated)
+
+    gen_library_fhn = GenLibraryFit(
+        funcs[model_idx],
+        funcs[model_idx],
+        fhn_variant=model_names[model_idx],
+        t_range=t_fit,
+        ics=ics[model_idx],
+        color=colors[model_idx],
+        optimizer=ps.SSR(alpha=0.5, normalize_columns=False) # ps.STLSQ(threshold=0.001, normalize_columns=True)
+    )
+
+    # Replace simulated recovery data with estimated recovery data.
+    gen_library_fhn.t_fhn_td = t_fit
+    gen_library_fhn.dt = t_fit[1] - t_fit[0]
+    gen_library_fhn.states_fhn_td = np.column_stack(
+        (u_fit, v_estimated, t_fit)
+    )
+
+    gen_library_fhn.fit(end_time_vis=t_end_vis)
+    print('-------------------------- SINDy fit finished. --------------------------- \n\n')
+    plt.show()
+
+    time.sleep(10)
+finally:    # End the timer.
+    stop.set()
+    timer.join()
+
+    elapsed = time.perf_counter() - start
+    print(f"\rElapsed: {elapsed:,.1f} seconds — stopped")

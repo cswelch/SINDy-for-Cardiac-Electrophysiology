@@ -17,17 +17,17 @@ import time
     
     Given:  Voltage trace, stimulus (assume fixed period for now)
     Need:  Recovery variable v
-    Methodology:  Guess a value for the recovery variable, generate the local action potential shape given that value, keep guessing values until that shape matches the data, then forecast
-    the next value, etc.
+    Methodology:  Using the previous value for the recovery variable, generate an estimate of the next voltage value. Based on the error between these values, 
+    use a root-finding algorithm (Brent's method in this case) to improve the recovery estimate, then repeat until within a specified tolerance. Iterate this 
+    procedure until recovery values have been estimated at all time steps until the final time.
 '''
 
 # Monitoring to keep track of time elapsed.
-def show_timer(start, stop):
+def show_timer(start, stop):    
     while not stop.is_set():
         elapsed = time.perf_counter() - start
         print(f"\rElapsed: {elapsed:,.1f} seconds", end="", flush=True)
         stop.wait(0.1)
-
 
 start = time.perf_counter()
 stop = threading.Event()
@@ -50,13 +50,13 @@ try:
     #   5 = FHN-c w/ pacedown
     #   6 = VF4 w/ pacedown
     #   7 = VF7 w/ pacedown
-    model_idx = 5
+    model_idx = 7
     stim_mag = 0.12
 
-    dt = 0.05    # Time step
+    dt = 0.01    # Time step
     root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
-    t_end_sim = 1000    # Upper bound of integration
-    t_end_vis = 1000     # Upper bound of x-axis on plots
+    t_end_sim = 2000    # Upper bound of integration
+    t_end_vis = 2000     # Upper bound of x-axis on plots
     n = int(t_end_sim / dt)   # Number of time steps
     t_fhn = np.arange(0, t_end_sim, dt)    # Time range for integration
 
@@ -67,24 +67,24 @@ try:
     #   dur (float): The time duration of the stimulus
     #   mag (float): The magnitude of the stimulus
     def func_log(t):
-        period=155.0
-        dur=5.0
+        period=155.
+        dur=5.
         mag=stim_mag
 
         stimulus = mag * (np.mod(t, period) <= dur)
         return stimulus
 
     def func_log_vf_4(t):
-        period=225.0
-        dur=5.0
+        period=225.
+        dur=5.
         mag=stim_mag
 
         stimulus = mag * (np.mod(t, period) <= dur)
         return stimulus
 
     def func_log_vf_7(t):
-        period=361.0
-        dur=5.0
+        period=361.
+        dur=5.
         mag=stim_mag
 
         stimulus = mag * (np.mod(t, period) <= dur)
@@ -137,6 +137,7 @@ try:
         stimulus = mag * is_stim
         return stimulus
 
+    # TODO Using longer periods for VF7 due to nature of model not working, but these are giving early spikes; how to fix?
     '''
         Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period, with larger periods for the VF7 model.
         Params:
@@ -150,7 +151,7 @@ try:
         dur=5.0
         mag=0.12
         stim_count=3
-        periods = np.array([610., 460., 310.])
+        periods = np.array([305., 230., 155.])
         
         period_0_multiple = np.minimum(np.floor(t / periods[0]), stim_count)
         period_1_multiple = np.minimum(np.floor((t - period_0_multiple * periods[0]) / periods[1]), stim_count)
@@ -218,7 +219,6 @@ try:
         x_0_vf_4,
         x_0_vf_7]
 
-    # TODO Using longer periods for VF7 due to nature of model. How about for FHN-c + VF4?
     # Stimulus functions
     funcs = [func_log,
             func_log,

@@ -22,7 +22,7 @@ def fhn(state, t, non_aut_term, alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0,
     v_dot = eps * (beta * u - gamma * v - delta)
 
     # Add time-dependent voltage perturbation
-    u_dot +=  non_aut_term(t)
+    u_dot += non_aut_term(t)
     return u_dot, v_dot
 
 
@@ -43,7 +43,7 @@ def fhn_c(state, t, non_aut_term, alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.
     v_dot = eps * (beta * u - gamma * v - delta)
 
     # Add time-dependent voltage perturbation
-    u_dot +=  non_aut_term(t)
+    u_dot += non_aut_term(t)
     return u_dot, v_dot
 
 
@@ -64,7 +64,7 @@ def fhn_vf_4(state, t, non_aut_term, alpha = 0.2, beta = 1.1, eps = 0.005, mu = 
     v_dot = eps * (u * (beta - u) - v)
 
     # Add time-dependent voltage perturbation
-    u_dot +=  non_aut_term(t)
+    u_dot += non_aut_term(t)
     return u_dot, v_dot
 
 
@@ -85,7 +85,7 @@ def fhn_vf_7(state, t, non_aut_term, alpha = 0.25, beta = 1.1, gamma = 0.1, delt
     v_dot = eps * ((beta - u) * (u - gamma) - delta * v - theta)
 
     # Add time-dependent voltage perturbation
-    u_dot +=  non_aut_term(t)
+    u_dot += non_aut_term(t)
     return u_dot, v_dot
 
 
@@ -107,7 +107,7 @@ def barkley(state, t, non_aut_term, a = 0.75, b = 0.02, eps = 0.02):
     v_dot = eps * (u - v)
 
     # Add time-dependent voltage perturbation
-    u_dot +=  non_aut_term(t)
+    u_dot += non_aut_term(t)
     return u_dot, v_dot
 
 

@@ -91,14 +91,6 @@ try:
         stimulus = mag * (np.mod(t, period) <= dur)
         return stimulus
 
-    def func_log_barkley(t):
-        period=155.
-        dur=5.
-        mag=stim_mag
-
-        stimulus = mag * (np.mod(t, period) <= dur)
-        return stimulus
-
     '''
         Function that defines stimulus with 3 sets of stim_count pulses, each with decreasing period.
         Params:
@@ -193,6 +185,14 @@ try:
 
         stimulus = mag * is_stim
         return stimulus
+
+    def func_log_barkley(t):
+            period=500.
+            dur=5.
+            mag=stim_mag
+
+            stimulus = mag * (np.mod(t, period) <= dur)
+            return stimulus
 
     # Models
     models = [fhn,
@@ -341,6 +341,7 @@ try:
         optimizer=ps.SSR(alpha=0.5, normalize_columns=False) # ps.STLSQ(threshold=0.001, normalize_columns=True)
     )
 
+    # TODO Need to make these fit more generic model names
     # Replace simulated recovery data with estimated recovery data.
     gen_library_fhn.t_fhn_td = t_fit
     gen_library_fhn.dt = t_fit[1] - t_fit[0]

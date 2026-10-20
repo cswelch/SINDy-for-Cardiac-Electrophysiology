@@ -10,14 +10,13 @@ from scipy.signal import find_peaks
 from sklearn.base import BaseEstimator, clone
 
 
-class ExcludeLastFeaturesFromV(BaseEstimator):
-    '''
+'''
     Fit each equation with an existing PySINDy optimizer.
 
     The last n_excluded feature columns are unavailable to target 1 (v').
     Targets 0 (u') and 2 (t') can use every column.
-    '''
-
+'''
+class ExcludeLastFeaturesFromV(BaseEstimator):
     def __init__(self, optimizer, n_excluded):
         self.optimizer = optimizer
         self.n_excluded = n_excluded
@@ -55,9 +54,7 @@ class ExcludeLastFeaturesFromV(BaseEstimator):
     def predict(self, X):
         return np.asarray(X) @ self.coef_.T
     
-
-class GenLibraryFit():
-    '''
+'''
     Define class to create a GeneralizedLibrary and fit a model with a specified non-autonomous term. Initialize the class with a
     non-autonomous term function.
     Params:
@@ -73,7 +70,8 @@ class GenLibraryFit():
         tau (float): The time delay used for delay / Takens embedding method(s).
         optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults 
                                        to STLSQ with threshold=0.1 and normalize_columns=True.
-    '''
+'''
+class GenLibraryFit():
     def __init__(self, non_aut_term_data, non_aut_term_fit, model_variant='standard',
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
             u_noise=0.0, v_noise=0.0, tau=None, optimizer=None):
@@ -457,7 +455,8 @@ class GenLibraryFit():
             lambda u: u, 
             lambda u: u**2, 
             lambda u: u**3,
-            lambda u, v: u*v
+            lambda u, v: u*v,
+            lambda u, v: u**2*v
         ]
 
         t_functions = [
@@ -470,7 +469,7 @@ class GenLibraryFit():
         Create variable-specific libraries
         '''
         u_v_library = ps.CustomLibrary(library_functions=u_v_functions,
-                                            function_names=[lambda u: u, lambda u: u + '^2', lambda u: u + '^3', lambda u, v: u + '*' + v])
+                                            function_names=[lambda u: u, lambda u: u + '^2', lambda u: u + '^3', lambda u, v: u + '*' + v, lambda u, v: u + '^2' + '*' + v])
         t_library = ps.CustomLibrary(library_functions=t_functions,
                                             function_names=[lambda t: '1', lambda t: 'f_td(' + t + ')'])
         

@@ -7,7 +7,7 @@ from typing import cast
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 from gen_library_fit import GenLibraryFit
-from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs
+from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, barkley, compare_exact_and_sindy_coeffs
 
 import threading
 import time
@@ -50,7 +50,8 @@ try:
     #   5 = FHN-c w/ pacedown
     #   6 = VF4 w/ pacedown
     #   7 = VF7 w/ pacedown
-    model_idx = 7
+    #   8 = Barkley
+    model_idx = 8
     stim_mag = 0.12
 
     dt = 0.01    # Time step
@@ -84,6 +85,14 @@ try:
 
     def func_log_vf_7(t):
         period=361.
+        dur=5.
+        mag=stim_mag
+
+        stimulus = mag * (np.mod(t, period) <= dur)
+        return stimulus
+
+    def func_log_barkley(t):
+        period=155.
         dur=5.
         mag=stim_mag
 
@@ -193,7 +202,8 @@ try:
             fhn,
             fhn_c,
             fhn_vf_4,
-            fhn_vf_7]
+            fhn_vf_7,
+            barkley]
 
     # Their corresponding variant string names
     model_names = ['standard',
@@ -202,14 +212,16 @@ try:
                 'vf7',
                 'standard',
                 'cardiac',
-                    'vf4',
-                    'vf7']
+                'vf4',
+                'vf7',
+                'barkley']
 
     # ICs
     x_0_fhn = np.array([-0.1,0])
     x_0_fhn_c = np.array([0, 0.11])
     x_0_vf_4 = np.array([0, 0.11])
     x_0_vf_7 = np.array([0, 0])
+    x_0_barkley = np.array([0, 0])
     ics = [x_0_fhn,
         x_0_fhn_c,
         x_0_vf_4,
@@ -217,7 +229,8 @@ try:
         x_0_fhn,
         x_0_fhn_c,
         x_0_vf_4,
-        x_0_vf_7]
+        x_0_vf_7,
+        x_0_barkley]
 
     # Stimulus functions
     funcs = [func_log,
@@ -227,7 +240,8 @@ try:
             func_pacedown,
             func_pacedown,
             func_pacedown,
-            func_pacedown_vf_7]
+            func_pacedown_vf_7,
+            func_log_barkley]
 
     # Plot colors
     colors = ['teal',
@@ -237,7 +251,8 @@ try:
             'purple',
             'red',
             'blue',
-            'green']
+            'green',
+            'brown']
 
     states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
@@ -250,75 +265,76 @@ try:
         return out[1, 0] - u_new
 
 
-    # Catch where stimulus jumps occur and save them; only consider the leading edge since that's where problems happen.  We don't need to worry about t=0 since
-    # it is the starting value of the time series, so no jump from 0 -> stim_mag occurs on its leading edge.
-    stim_leading_edge_mask = ( funcs[model_idx](t_fhn) < stim_mag / 2 ) & ( funcs[model_idx](t_fhn + dt) > stim_mag / 2 )
-    stim_times = t_fhn[stim_leading_edge_mask]
+    # # Catch where stimulus jumps occur and save them; only consider the leading edge since that's where problems happen.  We don't need to worry about t=0 since
+    # # it is the starting value of the time series, so no jump from 0 -> stim_mag occurs on its leading edge.
+    # stim_leading_edge_mask = ( funcs[model_idx](t_fhn) < stim_mag / 2 ) & ( funcs[model_idx](t_fhn + dt) > stim_mag / 2 )
+    # stim_times = t_fhn[stim_leading_edge_mask]
 
-    # Start w/ initial recovery variable value
-    v_old_est = 0
-    estimated_vs = []
-    print('------------------ Reconstructing recovery variable... -------------------')
-    for i in range(n-1):
-        # if (i == 3098):
-        #     print('*** Entering spike region ***')
-        # elif (i == 3102):
-        #     print('*** Exiting spike region ***')
+    # TODO Add timeout if recovery iteration takes too long; possible model blowup if this is the case?
+    # # Start w/ initial recovery variable value
+    # v_old_est = 0
+    # estimated_vs = []
+    # print('------------------ Reconstructing recovery variable... -------------------')
+    # for i in range(n-1):
+    #     # if (i == 3098):
+    #     #     print('*** Entering spike region ***')
+    #     # elif (i == 3102):
+    #     #     print('*** Exiting spike region ***')
 
-        t_old = dt * i
-        t_new = dt * (i+1)
+    #     t_old = dt * i
+    #     t_new = dt * (i+1)
 
-        u_old = states_fhn[i, 0]
-        u_new = states_fhn[i+1, 0]
+    #     u_old = states_fhn[i, 0]
+    #     u_new = states_fhn[i+1, 0]
 
-        lower = v_old_est - 0.05
-        upper = v_old_est + 0.05
-        while voltage_error(lower, u_old, u_new, t_old, t_new) * voltage_error(upper, u_old, u_new, t_old, t_new) > 0:
-            lower -= 0.05
-            upper += 0.05
+    #     lower = v_old_est - 0.05
+    #     upper = v_old_est + 0.05
+    #     while voltage_error(lower, u_old, u_new, t_old, t_new) * voltage_error(upper, u_old, u_new, t_old, t_new) > 0:
+    #         lower -= 0.05
+    #         upper += 0.05
 
-        # Just use the last step's recovery variable value if at the leading edge of a stimulus pulse to prevent poor estimates.
-        if (t_old in stim_times):
-            v_old_est = estimated_vs[-1]
-        else:
-            v_old_est = cast(float, brentq(functools.partial(voltage_error, u_old=u_old, u_new=u_new, t_old=t_old, t_new=t_new), lower, upper, rtol=root_find_rel_tol))    # TODO
+    #     # Just use the last step's recovery variable value if at the leading edge of a stimulus pulse to prevent poor estimates.
+    #     if (t_old in stim_times):
+    #         v_old_est = estimated_vs[-1]
+    #     else:
+    #         v_old_est = cast(float, brentq(functools.partial(voltage_error, u_old=u_old, u_new=u_new, t_old=t_old, t_new=t_new), lower, upper, rtol=root_find_rel_tol))    # TODO
 
-        estimated_vs.append(v_old_est)
+    #     estimated_vs.append(v_old_est)
 
 
-    print('Length of t_fhn: ', len(t_fhn))
-    print('Length of estimated_vs: ', len(estimated_vs))
-    print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
+    # print('Length of t_fhn: ', len(t_fhn))
+    # print('Length of estimated_vs: ', len(estimated_vs))
+    # print('--------------- Recovery variable reconstruction finished. --------------- \n\n')
 
-    # plt.figure()
-    # plt.plot(t_fhn, states_fhn[:, 0])
-    # plt.title('Measured Voltages')
-    # plt.xlabel('t (arbitrary units)')
-    # plt.xlim(0, t_end_vis)
-    # plt.ylabel('u (V)')
+    # # plt.figure()
+    # # plt.plot(t_fhn, states_fhn[:, 0])
+    # # plt.title('Measured Voltages')
+    # # plt.xlabel('t (arbitrary units)')
+    # # plt.xlim(0, t_end_vis)
+    # # plt.ylabel('u (V)')
 
-    # plt.figure()
-    # plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
-    # plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
-    # plt.title('Estimated vs. True Recovery Variable Values')
-    # plt.xlabel('t (arbitrary units)')
-    # plt.xlim(0, t_end_vis)
-    # plt.ylabel('v (recovery units)')
-    # plt.legend()
-    # plt.show()
+    # # plt.figure()
+    # # plt.plot(t_fhn[:-1], estimated_vs, label='Estimated v')
+    # # plt.plot(t_fhn, states_fhn[:, 1], label='True v', linestyle=':')
+    # # plt.title('Estimated vs. True Recovery Variable Values')
+    # # plt.xlabel('t (arbitrary units)')
+    # # plt.xlim(0, t_end_vis)
+    # # plt.ylabel('v (recovery units)')
+    # # plt.legend()
+    # # plt.show()
 
-    # ------------------------------ Do the SINDy fit ------------------------------
-    print('--------- Starting SINDy fit with estimated recovery variable... ---------')
+    # # ------------------------------ Do the SINDy fit ------------------------------
+    # print('--------- Starting SINDy fit with estimated recovery variable... ---------')
     t_fit = t_fhn[:-1]
     u_fit = states_fhn[:-1, 0]
-    v_estimated = np.asarray(estimated_vs)
+    # v_estimated = np.asarray(estimated_vs)
 
-    assert len(t_fit) == len(u_fit) == len(v_estimated)
+    # assert len(t_fit) == len(u_fit) == len(v_estimated)
 
     gen_library_fhn = GenLibraryFit(
         funcs[model_idx],
         funcs[model_idx],
-        fhn_variant=model_names[model_idx],
+        model_variant=model_names[model_idx],
         t_range=t_fit,
         ics=ics[model_idx],
         color=colors[model_idx],
@@ -329,7 +345,7 @@ try:
     gen_library_fhn.t_fhn_td = t_fit
     gen_library_fhn.dt = t_fit[1] - t_fit[0]
     gen_library_fhn.states_fhn_td = np.column_stack(
-        (u_fit, v_estimated, t_fit)
+        (u_fit, states_fhn[:-1, 1], t_fit)
     )
 
     gen_library_fhn.fit(end_time_vis=t_end_vis)

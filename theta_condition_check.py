@@ -15,7 +15,7 @@ for period in [155.0, 185.0, 225.0]:
             g = GenLibraryFit(
                 func,
                 func,
-                fhn_variant='standard',
+                model_variant='standard',
                 t_range=np.arange(0, 500, 0.05),
                 ics=np.array([-0.1, 0]),
                 tau=4.0,

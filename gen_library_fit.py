@@ -2,7 +2,7 @@ import numpy as np
 import pysindy as ps
 from scipy.integrate import odeint
 from ddeint import ddeint
-from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, compare_exact_and_sindy_coeffs, get_fhn_exact_coeffs
+from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, barkley, compare_exact_and_sindy_coeffs, get_exact_model_coeffs
 import matplotlib.pyplot as plt
 from sklearn import metrics
 from scipy.signal import find_peaks
@@ -58,16 +58,15 @@ class ExcludeLastFeaturesFromV(BaseEstimator):
 
 class GenLibraryFit():
     '''
-    Define class to create a GeneralizedLibrary and fit FHN with a specified non-autonomous term. Initialize the class with a 
+    Define class to create a GeneralizedLibrary and fit a model with a specified non-autonomous term. Initialize the class with a
     non-autonomous term function.
     Params:
         non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
         non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
-        fhn_variant (str): The variant of the FitzHugh-Nagumo equations to use; 'standard' for FHN, 'cardiac' for FHN-c, 'vf4' for the 
-                           4-parameter Velasco-Fenton model, 'vf7' for the 7-parameter Velasco-Fenton model, and 'fhn_lode' for Latent-
-                           ODE FHN.
-        t_range (1d array): The time range over which to simulate the FHN equations, including start time, end time, and time step dt.
-        ics (1d array): Initial conditions for the FHN equations.
+        model_variant (str): The equation model to use: 'standard', 'cardiac', 'vf4', 'vf7', 'barkley', or a supported
+                             delayed / L-ODE variant.
+        t_range (1d array): The time range over which to simulate the model, including start time, end time, and time step dt.
+        ics (1d array): Initial conditions for the model.
         color (string): Color to use for the original data in the reconstruction plots.
         u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
         v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
@@ -75,7 +74,7 @@ class GenLibraryFit():
         optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults 
                                        to STLSQ with threshold=0.1 and normalize_columns=True.
     '''
-    def __init__(self, non_aut_term_data, non_aut_term_fit, fhn_variant='standard', 
+    def __init__(self, non_aut_term_data, non_aut_term_fit, model_variant='standard',
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
             u_noise=0.0, v_noise=0.0, tau=None, optimizer=None):
         
@@ -91,7 +90,7 @@ class GenLibraryFit():
         
         # Auto-compute optimal delay if not provided
         if tau is None:
-            self.tau = self._compute_delay(fhn_variant, ics, t_range[:10000],  # 500 TODO Make this parameter for user to specify how many pulses to use for delay estimation (not just fixed value).
+            self.tau = self._compute_delay(model_variant, ics, t_range[:10000],  # 500 TODO Make this parameter for user to specify how many pulses to use for delay estimation (not just fixed value).
                                         non_aut_term_data)
         else:
             self.tau = tau
@@ -99,45 +98,48 @@ class GenLibraryFit():
         self.optimizer = (ps.STLSQ(threshold=0.1, normalize_columns=True)
                   if optimizer is None else optimizer)
                 
-        if fhn_variant == 'standard':
-            self.fhn_name = 'standard'
-            self.fhn_variant = self.fhn_td
-        elif fhn_variant == 'cardiac':
-            self.fhn_name = 'cardiac'
-            self.fhn_variant = self.fhn_c_td
-        elif fhn_variant == 'vf4':
-            self.fhn_name = 'vf4'
-            self.fhn_variant = self.fhn_vf_4_td
-        elif fhn_variant == 'vf7':
-            self.fhn_name = 'vf7'
-            self.fhn_variant = self.fhn_vf_7_td
-        elif fhn_variant == 'standard_delayed_copy':
-            self.fhn_name = 'standard_delayed_copy'
-            self.fhn_variant = self.fhn_delayed_copy
-        elif fhn_variant == 'fhn_auto_osc_delayed_copy':
-            self.fhn_name = 'fhn_auto_osc_delayed_copy'
-            self.fhn_variant = self.fhn_auto_osc_delayed_copy
-        elif fhn_variant == 'fhn_lode': # The L-ODE variant used in fit_latent_ode() generates with the same FHN data but needs a different name
-            self.fhn_name = 'fhn_lode'
-            self.fhn_variant = self.fhn_td
+        if model_variant == 'standard':
+            self.model_name = 'standard'
+            self.model_function = self.fhn_td
+        elif model_variant == 'cardiac':
+            self.model_name = 'cardiac'
+            self.model_function = self.fhn_c_td
+        elif model_variant == 'vf4':
+            self.model_name = 'vf4'
+            self.model_function = self.fhn_vf_4_td
+        elif model_variant == 'vf7':
+            self.model_name = 'vf7'
+            self.model_function = self.fhn_vf_7_td
+        elif model_variant == 'standard_delayed_copy':
+            self.model_name = 'standard_delayed_copy'
+            self.model_function = self.fhn_delayed_copy
+        elif model_variant == 'fhn_auto_osc_delayed_copy':
+            self.model_name = 'fhn_auto_osc_delayed_copy'
+            self.model_function = self.fhn_auto_osc_delayed_copy
+        elif model_variant == 'fhn_lode': # The L-ODE variant used in fit_latent_ode() generates with the same FHN data but needs a different name
+            self.model_name = 'fhn_lode'
+            self.model_function = self.fhn_td
+        elif model_variant == 'barkley':
+            self.model_name = 'barkley'
+            self.model_function = self.barkley_td
 
         # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
         def initial_history(t):
             return self.x_0_fhn_td
 
         # Integrate to get u, v, and t data.
-        if fhn_variant == 'standard_delayed_copy':
+        if model_variant == 'standard_delayed_copy':
             # Wraps additional arguments sent to delayed function
-            fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
+            model_function = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
             # For any delayed copy variant, use ddeint instead
-            self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
-        elif fhn_variant == 'fhn_auto_osc_delayed_copy':  # For non-delayed variants, use odeint
+            self.states_fhn_td = ddeint(model_function, initial_history, self.t_fhn_td)
+        elif model_variant == 'fhn_auto_osc_delayed_copy':  # For non-delayed variants, use odeint
             # Wraps additional arguments sent to delayed function
-            fhn_variant_func = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
-            self.states_fhn_td = ddeint(fhn_variant_func, initial_history, self.t_fhn_td)
+            model_function = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
+            self.states_fhn_td = ddeint(model_function, initial_history, self.t_fhn_td)
         else:
             # For non-delayed variants (i.e., 'standard' + 'cardiac' + 'vf4' + 'vf7'), use odeint
-            self.states_fhn_td = odeint(self.fhn_variant, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1)
+            self.states_fhn_td = odeint(self.model_function, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1)
             
 
         # int_u = np.trapz(y=self.states_fhn_td[:, 0], dx=0.01)
@@ -163,23 +165,24 @@ class GenLibraryFit():
     '''
     Estimate optimal time delay using Average Mutual Information (AMI).
     '''
-    def _compute_delay(self, fhn_variant, ics, t_short, non_aut_term):
+    def _compute_delay(self, model_variant, ics, t_short, non_aut_term):
         # Generate short trajectory for analysis.
-        variant_functions = {
+        model_functions = {
             'standard': fhn,
             'cardiac': fhn_c,
             'vf4': fhn_vf_4,
             'vf7': fhn_vf_7,
             'fhn_lode': fhn,
+            'barkley': barkley
         }
 
-        if fhn_variant not in variant_functions:
-            raise ValueError(f'Unknown FHN variant: {fhn_variant}')
+        if model_variant not in model_functions:
+            raise ValueError(f'Unknown model variant: {model_variant}')
 
-        fhn_func_base = variant_functions[fhn_variant]
-        fhn_func = lambda Y, t: fhn_func_base(Y, t, non_aut_term)
+        model_function = model_functions[model_variant]
+        model_rhs = lambda Y, t: model_function(Y, t, non_aut_term)
         
-        u_short = odeint(fhn_func, ics, t_short)[:, 0]
+        u_short = odeint(model_rhs, ics, t_short)[:, 0]
 
         # TODO Short trajectory plot for debugging
         # plt.plot(t_short, u_short)
@@ -235,6 +238,9 @@ class GenLibraryFit():
     # Define VF-b (VF-7) variant of FHN w/ non_aut_term_data term
     def fhn_vf_7_td(self, state, t):
         return fhn_vf_7(state, t, self.non_aut_term_data)
+
+    def barkley_td(self, state, t):
+        return barkley(state, t, self.non_aut_term_data)
     
 
     '''
@@ -428,7 +434,7 @@ class GenLibraryFit():
             # ax[i].set_ylim(-0.1, 1.1) # Set constant limits so we can compare across different plots
             ax[i].set_xlabel('t')
             ax[i].set_ylabel(['u', 'v'][i])
-            ax[i].set_title([f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})', f'Recovery Variable vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__})'][i])
+            ax[i].set_title([f'Voltage vs. Time ({self.model_name}, {self.non_aut_term_data.__name__})', f'Recovery Variable vs. Time ({self.model_name}, {self.non_aut_term_data.__name__})'][i])
             ax[i].grid(alpha=0.3)
             # if (i == 0):
             #     ax[i].set_ylim(-0.05, 0.9) # Set constanty limits for u plot to maintain comparability
@@ -507,7 +513,7 @@ class GenLibraryFit():
         print('Excluded from v\':', names[-n_forcing_columns:])
 
         # Create bar chart comparison between SINDy and exact coefficients
-        compare_exact_and_sindy_coeffs(model_fhn_td, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
+        compare_exact_and_sindy_coeffs(model_fhn_td, self.model_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
 
         # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
         self.reconstruct_and_plot(model_fhn_td, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0], end_time=end_time_vis)
@@ -708,7 +714,7 @@ class GenLibraryFit():
             ax.set_xlim(0, end_time)
             ax.set_xlabel('t')
             ax.set_ylabel('u')
-            ax.set_title(f'Voltage vs. Time ({self.fhn_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.2f}, Embedding Dimension {self.takens_n_embed})')
+            ax.set_title(f'Voltage vs. Time ({self.model_name}, {self.non_aut_term_data.__name__}, Delay = {self.tau:.2f}, Embedding Dimension {self.takens_n_embed})')
             ax.legend(loc='upper right')
             ax.grid(alpha=0.3)
             plt.tight_layout()
@@ -902,7 +908,7 @@ class GenLibraryFit():
         # print(t.shape)
 
         # Create bar chart comparison between SINDy and exact coefficients.
-        compare_exact_and_sindy_coeffs(model_latent, self.fhn_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
+        compare_exact_and_sindy_coeffs(model_latent, self.model_name, non_aut_term_data=self.non_aut_term_data, non_aut_term_fit=self.non_aut_term_fit)
         
         # Reconstruct the solution from the SINDy fit and plot it against the data; display the reconstruction MAE on the plot
         self.reconstruct_and_plot(model_latent, self.t_fhn_td, self.x_0_fhn_td, self.states_fhn_td[:, 0], end_time=end_time)

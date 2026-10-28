@@ -53,6 +53,9 @@ try:
     #   8 = Barkley
     model_idx = 8
     stim_mag = 0.12
+    barkley_c = 1.0
+    barkley_period = 500.
+    barkley_duration = 5.
 
     dt = 0.01    # Time step
     root_find_rel_tol = 1e-3 # Relative tolerance for Brent's method application (starts to fail around 0.5–1)
@@ -187,12 +190,7 @@ try:
         return stimulus
 
     def func_log_barkley(t):
-            period=500.
-            dur=5.
-            mag=stim_mag
-
-            stimulus = mag * (np.mod(t, period) <= dur)
-            return stimulus
+        return stim_mag * (np.mod(t, barkley_period) <= barkley_duration)
 
     # Models
     models = [fhn,
@@ -254,17 +252,41 @@ try:
             'green',
             'brown']
 
-    states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
+    if model_names[model_idx] == 'barkley':
+        states_fhn = np.column_stack(barkley(
+            c=barkley_c,
+            I=stim_mag,
+            T=t_end_sim,
+            dt=dt,
+            per=barkley_period,
+            dur=barkley_duration,
+        ))
+    else:
+        states_fhn = odeint(models[model_idx], ics[model_idx], t_fhn, args=(funcs[model_idx],), hmax=0.1) # Real n x 2 reference matrix of [u, v]
 
     # Infer the error between the estimated (out[1, 0]) and true voltage (u_new) under the assumption of v_candidate as the recovery variable estimate at the
     # last time step.
     def voltage_error(v_candidate, u_old, u_new, t_old, t_new):
         ics_cur = np.array([u_old, v_candidate])
+        if model_names[model_idx] == 'barkley':
+            out, _ = barkley(
+                c=barkley_c,
+                I=stim_mag,
+                T=dt,
+                dt=dt,
+                per=barkley_period,
+                dur=barkley_duration,
+                initial_state=ics_cur,
+                t_start=t_old,
+            )
+            return out[-1] - u_new
+
         t_cur = np.array([t_old, t_new])
         out = odeint(models[model_idx], ics_cur, t_cur, args=(funcs[model_idx],), hmax=0.1)
         return out[1, 0] - u_new
 
 
+    # TODO Uncomment recovery variable reconstruction after Barkley correctness testing done
     # # Catch where stimulus jumps occur and save them; only consider the leading edge since that's where problems happen.  We don't need to worry about t=0 since
     # # it is the starting value of the time series, so no jump from 0 -> stim_mag occurs on its leading edge.
     # stim_leading_edge_mask = ( funcs[model_idx](t_fhn) < stim_mag / 2 ) & ( funcs[model_idx](t_fhn + dt) > stim_mag / 2 )
@@ -338,7 +360,11 @@ try:
         t_range=t_fit,
         ics=ics[model_idx],
         color=colors[model_idx],
-        optimizer=ps.SSR(alpha=0.5, normalize_columns=False) # ps.STLSQ(threshold=0.001, normalize_columns=True)
+        optimizer=ps.SSR(alpha=0.5, normalize_columns=False), # ps.STLSQ(threshold=0.001, normalize_columns=True)
+        barkley_c=barkley_c,
+        barkley_I=stim_mag,
+        barkley_per=barkley_period,
+        barkley_dur=barkley_duration,
     )
 
     # TODO Need to make these fit more generic model names

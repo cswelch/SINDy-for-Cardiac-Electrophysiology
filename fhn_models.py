@@ -90,25 +90,40 @@ def fhn_vf_7(state, t, non_aut_term, alpha = 0.25, beta = 1.1, gamma = 0.1, delt
 
 
 '''
-Generate the data using the Barkley model for excitable media (1991). Its chief advantage over FHN variants consists in its piecewise-
-linear nullclines, resulting in improved computational efficiency in exploiting large quiescent regions.
+Simulate the Barkley model for excitable media (1991) with an explicit Euler step.
+The periodic stimulus is included internally, so this is a trajectory generator,
+not an odeint-compatible right-hand-side function.
 Returns:
-    u_dot (float): The time derivative of the state variable u.
-    v_dot (float): The time derivative of the state variable v.
+    U, V (1d arrays): Simulated voltage and recovery-variable trajectories.
 Params:
-    state (2d array):        Contains the state variables u and v
-    t (1d array):            Time input
-    non_aut_term (1d array): A non-autonomous term to be added to the u_dot equation
-    alpha = 0.75, beta = 0.02,  eps = 0.02 (Representative parameters found in http://www.scholarpedia.org/article/Barkley_model#General_form_of_the_model)
+    c (float):         Voltage scale in the u equation.
+    I (float):         Magnitude of each periodic stimulus.
+    T (float):         Simulation duration.
+    dt (float):        Time step.
+    per (float):       Stimulus period.
+    dur (float):       Stimulus duration.
+    a, b, eps (float): Barkley model parameters.
+    initial_state (array-like): Initial voltage and recovery values.
+    t_start (float):   Start time, used to keep the stimulus phase aligned.
 '''
-def barkley(state, t, non_aut_term, a = 0.75, b = 0.02, eps = 0.02):
-    u, v = state
-    u_dot = u * (1 - u) * (u - (v + b) / a)
-    v_dot = eps * (u - v)
-
-    # Add time-dependent voltage perturbation
-    u_dot += non_aut_term(t)
-    return u_dot, v_dot
+def barkley(c: float, I: float, T: float = 2000., dt: float = 0.01,
+            per: float = 500., dur: float = 5., a: float = 0.75,
+            b: float = 0.02, eps: float = 0.02,
+            initial_state=(0.0, 0.0), t_start: float = 0.):
+    n = int(T / dt)
+    u, v = initial_state
+    U, V = np.empty(n), np.empty(n)
+    for i in range(n):
+        t = t_start + i * dt
+        uth = (v + b) / a
+        s = I * ((t % per) <= dur)
+        if u > 0.5 * c and uth >= c:      # upper branch has vanished
+            u = 0.0                       # repolarize
+        else:
+            u = min(u + dt * (u * (c - u) * (u - uth) + s), c)
+        v += dt * eps * (u - v)
+        U[i], V[i] = u, v
+    return U, V
 
 
 # TODO Figure out how to make this handle 2nd-order L-ODE forms to compare exact coefficients automatically.
@@ -221,7 +236,7 @@ def get_exact_model_coeffs(model_name='standard', monomial_names = ['u', 'u**2',
         elif model_name == 'fhn_lode':
             params = dict(alpha = 0.1, beta = 0.5, gamma = 1, delta = 0.0, eps = 0.01)
         elif model_name == 'barkley':
-            params = dict(a = 0.75, b = 0.02, eps = 0.02)
+            params = dict(c = 1.0, a = 0.75, b = 0.02, eps = 0.02) # TODO Fix hardcoded Barkley c value
         else:
             raise ValueError('Unknown model variant')
 
@@ -275,7 +290,7 @@ def get_exact_model_coeffs(model_name='standard', monomial_names = ['u', 'u**2',
 
         return np.array([u_dot_coeffs, u_dot_dot_coeffs])
     elif model_name == 'barkley':
-        u_rhs = u * (1 - u) * (u - (v + params['b']) / params['a']) + f_td
+        u_rhs = u * (params['c'] - u) * (u - (v + params['b']) / params['a']) + f_td
         v_rhs = params['eps'] * (u - v)
     else:
         raise ValueError('Unknown model variant')

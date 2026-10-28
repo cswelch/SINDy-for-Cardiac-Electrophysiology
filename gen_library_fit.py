@@ -59,6 +59,7 @@ class ExcludeLastFeaturesFromV(BaseEstimator):
     non-autonomous term function.
     Params:
         non_aut_term_data (function): A function that takes time as input and returns a non-autonomous term for data generation.
+                                      Barkley data instead use the internally generated stimulus configured below.
         non_aut_term_fit (function): A function that takes time as input and returns a non-autonomous term for fitting.
         model_variant (str): The equation model to use: 'standard', 'cardiac', 'vf4', 'vf7', 'barkley', or a supported
                              delayed / L-ODE variant.
@@ -67,6 +68,10 @@ class ExcludeLastFeaturesFromV(BaseEstimator):
         color (string): Color to use for the original data in the reconstruction plots.
         u_noise (float): Standard deviation of Gaussian noise to add to the u variable. Default is 0.0 (no noise).
         v_noise (float): Standard deviation of Gaussian noise to add to the v variable. Default is 0.0 (no noise).
+        barkley_c (float): Barkley voltage scale.
+        barkley_I (float): Magnitude of Barkley's internally generated periodic stimulus.
+        barkley_per (float): Period of Barkley's internally generated stimulus.
+        barkley_dur (float): Duration of Barkley's internally generated stimulus.
         tau (float): The time delay used for delay / Takens embedding method(s).
         optimizer (pysindy.Optimizer): The optimizer to use for the SINDy fit (fit(), fit_takens(), fit_latent_ode()). If None, defaults 
                                        to STLSQ with threshold=0.1 and normalize_columns=True.
@@ -74,7 +79,8 @@ class ExcludeLastFeaturesFromV(BaseEstimator):
 class GenLibraryFit():
     def __init__(self, non_aut_term_data, non_aut_term_fit, model_variant='standard',
             t_range=np.arange(0,2000,0.01), ics=np.array([-0.1,0]), color='blue', 
-            u_noise=0.0, v_noise=0.0, tau=None, optimizer=None):
+            u_noise=0.0, v_noise=0.0, tau=None, optimizer=None,
+            barkley_c=1.0, barkley_I=0.12, barkley_per=500., barkley_dur=5.):
         
         # Initialize with Takens embedding using 5 time delays.
         self.t_fhn_td = t_range
@@ -82,6 +88,10 @@ class GenLibraryFit():
         self.color = color
         self.non_aut_term_data = non_aut_term_data
         self.non_aut_term_fit = non_aut_term_fit
+        self.barkley_c = barkley_c
+        self.barkley_I = barkley_I
+        self.barkley_per = barkley_per
+        self.barkley_dur = barkley_dur
         
         # Compute dt for delay calculations
         self.dt = t_range[1] - t_range[0] if len(t_range) > 1 else 1.0
@@ -119,14 +129,15 @@ class GenLibraryFit():
             self.model_function = self.fhn_td
         elif model_variant == 'barkley':
             self.model_name = 'barkley'
-            self.model_function = self.barkley_td
 
         # Function wrapper for constant ICs passed to ddeint so they are callable as it expects.
         def initial_history(t):
             return self.x_0_fhn_td
 
         # Integrate to get u, v, and t data.
-        if model_variant == 'standard_delayed_copy':
+        if model_variant == 'barkley':
+            self.states_fhn_td = self._simulate_barkley(self.t_fhn_td, self.x_0_fhn_td)
+        elif model_variant == 'standard_delayed_copy':
             # Wraps additional arguments sent to delayed function
             model_function = lambda Y, t: GenLibraryFit.fhn_delayed_copy(Y, t, self.non_aut_term_data, self.tau)
             # For any delayed copy variant, use ddeint instead
@@ -136,7 +147,7 @@ class GenLibraryFit():
             model_function = lambda Y, t: GenLibraryFit.fhn_auto_osc_delayed_copy(Y, t, self.tau)
             self.states_fhn_td = ddeint(model_function, initial_history, self.t_fhn_td)
         else:
-            # For non-delayed variants (i.e., 'standard' + 'cardiac' + 'vf4' + 'vf7'), use odeint
+            # For continuous non-delayed variants, use odeint.
             self.states_fhn_td = odeint(self.model_function, self.x_0_fhn_td, self.t_fhn_td, hmax=0.1)
             
 
@@ -163,6 +174,19 @@ class GenLibraryFit():
     '''
     Estimate optimal time delay using Average Mutual Information (AMI).
     '''
+    def _simulate_barkley(self, time_values, initial_state):
+        u, v = barkley(
+            c=self.barkley_c,
+            I=self.barkley_I,
+            T=len(time_values) * self.dt,
+            dt=self.dt,
+            per=self.barkley_per,
+            dur=self.barkley_dur,
+            initial_state=initial_state,
+            t_start=time_values[0],
+        )
+        return np.column_stack((u, v))
+
     def _compute_delay(self, model_variant, ics, t_short, non_aut_term):
         # Generate short trajectory for analysis.
         model_functions = {
@@ -170,17 +194,18 @@ class GenLibraryFit():
             'cardiac': fhn_c,
             'vf4': fhn_vf_4,
             'vf7': fhn_vf_7,
-            'fhn_lode': fhn,
-            'barkley': barkley
+            'fhn_lode': fhn
         }
 
-        if model_variant not in model_functions:
-            raise ValueError(f'Unknown model variant: {model_variant}')
+        if model_variant == 'barkley':
+            u_short = self._simulate_barkley(t_short, ics)[:, 0]
+        else:
+            if model_variant not in model_functions:
+                raise ValueError(f'Unknown model variant: {model_variant}')
 
-        model_function = model_functions[model_variant]
-        model_rhs = lambda Y, t: model_function(Y, t, non_aut_term)
-        
-        u_short = odeint(model_rhs, ics, t_short)[:, 0]
+            model_function = model_functions[model_variant]
+            model_rhs = lambda Y, t: model_function(Y, t, non_aut_term)
+            u_short = odeint(model_rhs, ics, t_short)[:, 0]
 
         # TODO Short trajectory plot for debugging
         # plt.plot(t_short, u_short)
@@ -236,10 +261,6 @@ class GenLibraryFit():
     # Define VF-b (VF-7) variant of FHN w/ non_aut_term_data term
     def fhn_vf_7_td(self, state, t):
         return fhn_vf_7(state, t, self.non_aut_term_data)
-
-    def barkley_td(self, state, t):
-        return barkley(state, t, self.non_aut_term_data)
-    
 
     '''
     Define versions with v' defined as delayed version of u' equation. Done as FHN system to be

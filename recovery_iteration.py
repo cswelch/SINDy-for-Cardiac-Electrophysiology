@@ -11,6 +11,7 @@ from fhn_models import fhn, fhn_c, fhn_vf_4, fhn_vf_7, barkley, compare_exact_an
 
 import threading
 import time
+import sys
 
 '''
     Proposed variant of partially observed SINDy where voltage is known but recovery is unknown.
@@ -22,11 +23,11 @@ import time
     procedure until recovery values have been estimated at all time steps until the final time.
 '''
 
-# Monitoring to keep track of time elapsed.
-def show_timer(start, stop):    
+# Monitoring to keep track of time elapsed. Update the terminal title instead of printing to reduce clutter in output.
+def show_timer(start, stop):
     while not stop.is_set():
         elapsed = time.perf_counter() - start
-        print(f"\rElapsed: {elapsed:,.1f} seconds", end="", flush=True)
+        print(f"\033]0;Elapsed: {elapsed:,.1f} seconds \007", end="", flush=True)
         stop.wait(0.1)
 
 start = time.perf_counter()
@@ -54,6 +55,7 @@ try:
     model_idx = 8
     stim_mag = 0.12
     barkley_c = 1.0
+    # TODO These parameters could vary from their corresponding values in fhn_models.py; need to make them shared constants in separate file
     barkley_period = 500.
     barkley_duration = 5.
 
